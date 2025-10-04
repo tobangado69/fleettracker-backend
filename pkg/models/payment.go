@@ -222,7 +222,7 @@ func (s *Subscription) DaysUntilExpiry() int {
 	if s.IsExpired() {
 		return 0
 	}
-	return int(s.EndDate.Sub(time.Now()).Hours() / 24)
+	return int(time.Until(s.EndDate).Hours() / 24)
 }
 
 // GetMonthlyPrice returns monthly price for the subscription
@@ -360,7 +360,7 @@ func (i *Invoice) DaysOverdue() int {
 	if !i.IsOverdue() {
 		return 0
 	}
-	return int(time.Now().Sub(i.DueDate).Hours() / 24)
+	return int(time.Since(i.DueDate).Hours() / 24)
 }
 
 // MarkAsPaid marks invoice as paid

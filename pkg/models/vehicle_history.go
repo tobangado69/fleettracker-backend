@@ -128,7 +128,7 @@ func (vh *VehicleHistory) GetFormattedCost() string {
 
 // HasDocuments checks if the event has attached documents
 func (vh *VehicleHistory) HasDocuments() bool {
-	return vh.Documents != nil && len(vh.Documents) > 0
+	return len(vh.Documents) > 0
 }
 
 // GetDocumentCount returns the number of documents attached
