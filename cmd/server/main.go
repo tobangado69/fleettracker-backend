@@ -222,13 +222,19 @@ func setupRoutes(
 			// Vehicle management
 			vehicles := protected.Group("/vehicles")
 			{
-				vehicles.GET("", vehicleHandler.GetVehicles)
-				vehicles.POST("", vehicleHandler.CreateVehicle)
-				vehicles.GET("/:id", vehicleHandler.GetVehicle)
-				vehicles.PUT("/:id", vehicleHandler.UpdateVehicle)
-				vehicles.DELETE("/:id", vehicleHandler.DeleteVehicle)
+				vehicles.GET("", vehicleHandler.ListVehicles)              // List vehicles with filters
+				vehicles.POST("", vehicleHandler.CreateVehicle)            // Create vehicle
+				vehicles.GET("/:id", vehicleHandler.GetVehicle)            // Get vehicle details
+				vehicles.PUT("/:id", vehicleHandler.UpdateVehicle)         // Update vehicle
+				vehicles.DELETE("/:id", vehicleHandler.DeleteVehicle)      // Delete vehicle
+				vehicles.PUT("/:id/status", vehicleHandler.UpdateVehicleStatus)     // Update vehicle status
+				vehicles.POST("/:id/assign-driver", vehicleHandler.AssignDriver)    // Assign driver
+				vehicles.DELETE("/:id/driver", vehicleHandler.UnassignDriver)       // Unassign driver
+				vehicles.GET("/:id/driver", vehicleHandler.GetVehicleDriver)        // Get vehicle driver
+				vehicles.PUT("/:id/inspection", vehicleHandler.UpdateInspectionDate) // Update inspection date
+				
+				// Legacy endpoints for backward compatibility
 				vehicles.GET("/:id/status", vehicleHandler.GetVehicleStatus)
-				vehicles.POST("/:id/assign-driver", vehicleHandler.AssignDriver)
 			}
 
 			// Driver management
