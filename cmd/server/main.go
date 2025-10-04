@@ -14,11 +14,13 @@ import (
 	"github.com/joho/godotenv"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"gorm.io/gorm"
 
 	"github.com/tobangado69/fleettracker-pro/backend/internal/auth"
 	"github.com/tobangado69/fleettracker-pro/backend/internal/common/config"
 	"github.com/tobangado69/fleettracker-pro/backend/internal/common/database"
 	"github.com/tobangado69/fleettracker-pro/backend/internal/common/middleware"
+	"github.com/tobangado69/fleettracker-pro/backend/internal/common/repository"
 	"github.com/tobangado69/fleettracker-pro/backend/internal/driver"
 	"github.com/tobangado69/fleettracker-pro/backend/internal/payment"
 	"github.com/tobangado69/fleettracker-pro/backend/internal/tracking"
@@ -90,6 +92,7 @@ func main() {
 		&models.User{},
 		&models.Session{},
 		&models.AuditLog{},
+		&models.PasswordResetToken{},
 		&models.Vehicle{},
 		&models.MaintenanceLog{},
 		&models.FuelLog{},
@@ -107,6 +110,10 @@ func main() {
 		log.Fatal("Failed to migrate database:", err)
 	}
 	log.Println("Database migrations completed successfully")
+
+	// Initialize repository manager
+	repoManager := repository.NewRepositoryManager(db)
+	log.Println("✅ Repository manager initialized successfully")
 
 	// Initialize Gin router
 	r := gin.New()
@@ -142,7 +149,7 @@ func main() {
 	paymentHandler := payment.NewHandler(paymentService)
 
 	// Setup routes
-	setupRoutes(r, authHandler, trackingHandler, vehicleHandler, driverHandler, paymentHandler)
+	setupRoutes(r, authHandler, trackingHandler, vehicleHandler, driverHandler, paymentHandler, cfg, db, repoManager)
 
 	// Setup WebSocket for real-time tracking
 	setupWebSocket(r, trackingService)
@@ -197,6 +204,9 @@ func setupRoutes(
 	vehicleHandler *vehicle.Handler,
 	driverHandler *driver.Handler,
 	paymentHandler *payment.Handler,
+	cfg *config.Config,
+	db *gorm.DB,
+	repoManager *repository.RepositoryManager,
 ) {
 	// API documentation
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
@@ -210,14 +220,17 @@ func setupRoutes(
 			auth.POST("/register", authHandler.Register)
 			auth.POST("/login", authHandler.Login)
 			auth.POST("/refresh", authHandler.RefreshToken)
-			auth.POST("/logout", middleware.AuthRequired(), authHandler.Logout)
-			auth.GET("/profile", middleware.AuthRequired(), authHandler.GetProfile)
-			auth.PUT("/profile", middleware.AuthRequired(), authHandler.UpdateProfile)
+			auth.POST("/logout", middleware.AuthRequired(cfg.JWTSecret, db), authHandler.Logout)
+			auth.GET("/profile", middleware.AuthRequired(cfg.JWTSecret, db), authHandler.GetProfile)
+			auth.PUT("/profile", middleware.AuthRequired(cfg.JWTSecret, db), authHandler.UpdateProfile)
+			auth.PUT("/change-password", middleware.AuthRequired(cfg.JWTSecret, db), authHandler.ChangePassword)
+			auth.POST("/forgot-password", authHandler.ForgotPassword)
+			auth.POST("/reset-password", authHandler.ResetPassword)
 		}
 
 		// Protected routes
 		protected := v1.Group("")
-		protected.Use(middleware.AuthRequired())
+		protected.Use(middleware.AuthRequired(cfg.JWTSecret, db))
 		{
 			// Vehicle management
 			vehicles := protected.Group("/vehicles")
@@ -311,6 +324,35 @@ func setupRoutes(
 				analytics.GET("/driver-performance", trackingHandler.GetDriverPerformance)
 				analytics.GET("/reports", trackingHandler.GenerateReport)
 				analytics.GET("/compliance", trackingHandler.GetComplianceReport)
+			}
+
+			// Repository health check (admin only)
+			repo := protected.Group("/repository")
+			repo.Use(middleware.RoleRequired("admin"))
+			{
+				repo.GET("/health", func(c *gin.Context) {
+					if err := repoManager.HealthCheck(c.Request.Context()); err != nil {
+						c.JSON(http.StatusServiceUnavailable, gin.H{
+							"status": "unhealthy",
+							"error":  err.Error(),
+						})
+						return
+					}
+					
+					stats, err := repoManager.GetStats()
+					if err != nil {
+						c.JSON(http.StatusInternalServerError, gin.H{
+							"status": "error",
+							"error":  err.Error(),
+						})
+						return
+					}
+					
+					c.JSON(http.StatusOK, gin.H{
+						"status": "healthy",
+						"stats":  stats,
+					})
+				})
 			}
 		}
 	}

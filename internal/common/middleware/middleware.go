@@ -7,11 +7,24 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/time/rate"
+	"gorm.io/gorm"
+
+	"github.com/tobangado69/fleettracker-pro/backend/pkg/models"
 )
 
+// Claims represents JWT claims
+type Claims struct {
+	UserID    string `json:"user_id"`
+	CompanyID string `json:"company_id"`
+	Role      string `json:"role"`
+	Username  string `json:"username"`
+	jwt.RegisteredClaims
+}
+
 // AuthRequired middleware validates JWT token
-func AuthRequired() gin.HandlerFunc {
+func AuthRequired(jwtSecret string, db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get Authorization header
 		authHeader := c.GetHeader("Authorization")
@@ -35,35 +48,66 @@ func AuthRequired() gin.HandlerFunc {
 			return
 		}
 
-		// Validate token (this would be implemented with your JWT secret)
-		// For now, we'll just check if token exists
-		if tokenString == "" {
+		// Parse and validate token
+		token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+			return []byte(jwtSecret), nil
+		})
+
+		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{
-				"error":   "Token required",
-				"message": "Please provide a valid JWT token",
+				"error":   "Invalid token",
+				"message": "Token validation failed",
 			})
 			c.Abort()
 			return
 		}
 
-		// TODO: Implement actual JWT validation
-		// token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		//     return []byte(jwtSecret), nil
-		// })
+		claims, ok := token.Claims.(*Claims)
+		if !ok || !token.Valid {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":   "Invalid token claims",
+				"message": "Token claims validation failed",
+			})
+			c.Abort()
+			return
+		}
 
-		// For now, just set user context
-		c.Set("user_id", "temp-user-id")
-		c.Set("company_id", "temp-company-id")
-		c.Set("role", "fleet_manager")
+		// Check if token is expired
+		if claims.ExpiresAt != nil && claims.ExpiresAt.Before(time.Now()) {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":   "Token expired",
+				"message": "Please refresh your token",
+			})
+			c.Abort()
+			return
+		}
+
+		// Verify user still exists and is active
+		var user models.User
+		if err := db.Where("id = ? AND is_active = true", claims.UserID).First(&user).Error; err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":   "User not found or inactive",
+				"message": "User account is no longer valid",
+			})
+			c.Abort()
+			return
+		}
+
+		// Set user information in context
+		c.Set("user_id", claims.UserID)
+		c.Set("company_id", claims.CompanyID)
+		c.Set("user_role", claims.Role)
+		c.Set("username", claims.Username)
+		c.Set("user", user)
 
 		c.Next()
 	}
 }
 
 // RoleRequired middleware checks if user has required role
-func RoleRequired(requiredRole string) gin.HandlerFunc {
+func RoleRequired(requiredRoles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userRole, exists := c.Get("role")
+		userRole, exists := c.Get("user_role")
 		if !exists {
 			c.JSON(http.StatusForbidden, gin.H{
 				"error":   "Role information not found",
@@ -73,10 +117,19 @@ func RoleRequired(requiredRole string) gin.HandlerFunc {
 			return
 		}
 
-		if userRole != requiredRole {
+		role := userRole.(string)
+		hasRole := false
+		for _, requiredRole := range requiredRoles {
+			if role == requiredRole {
+				hasRole = true
+				break
+			}
+		}
+
+		if !hasRole {
 			c.JSON(http.StatusForbidden, gin.H{
 				"error":   "Insufficient permissions",
-				"message": "This action requires " + requiredRole + " role",
+				"message": "This action requires one of the following roles: " + strings.Join(requiredRoles, ", "),
 			})
 			c.Abort()
 			return

@@ -38,6 +38,12 @@ type User struct {
 	IsVerified  bool      `json:"is_verified" gorm:"default:false"`
 	LastLoginAt *time.Time `json:"last_login_at"`
 	
+	// Authentication Security
+	FailedLoginAttempts int       `json:"failed_login_attempts" gorm:"default:0"`
+	LockedUntil         *time.Time `json:"locked_until"`
+	EmailVerifiedAt     *time.Time `json:"email_verified_at"`
+	EmailVerificationToken string  `json:"-" gorm:"type:varchar(255)"` // Hidden from JSON
+	
 	// Language and Preferences
 	Language    string    `json:"language" gorm:"type:varchar(10);default:'id'"` // id, en
 	Timezone    string    `json:"timezone" gorm:"type:varchar(50);default:'Asia/Jakarta'"`
@@ -54,9 +60,10 @@ type User struct {
 	DeletedAt   gorm.DeletedAt `json:"deleted_at" gorm:"index"`
 
 	// Relationships
-	Company    Company    `json:"company,omitempty" gorm:"foreignKey:CompanyID"`
-	Sessions   []Session  `json:"sessions,omitempty" gorm:"foreignKey:UserID"`
-	AuditLogs  []AuditLog `json:"audit_logs,omitempty" gorm:"foreignKey:UserID"`
+	Company             Company               `json:"company,omitempty" gorm:"foreignKey:CompanyID"`
+	Sessions            []Session             `json:"sessions,omitempty" gorm:"foreignKey:UserID"`
+	AuditLogs           []AuditLog            `json:"audit_logs,omitempty" gorm:"foreignKey:UserID"`
+	PasswordResetTokens []PasswordResetToken  `json:"password_reset_tokens,omitempty" gorm:"foreignKey:UserID"`
 }
 
 // Session represents user login sessions
@@ -92,6 +99,19 @@ type AuditLog struct {
 	User User `json:"user,omitempty" gorm:"foreignKey:UserID"`
 }
 
+// PasswordResetToken represents password reset tokens
+type PasswordResetToken struct {
+	ID        string    `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	UserID    string    `json:"user_id" gorm:"type:uuid;not null;index"`
+	Token     string    `json:"-" gorm:"type:varchar(255);unique;not null"` // Hidden from JSON
+	ExpiresAt time.Time `json:"expires_at"`
+	UsedAt    *time.Time `json:"used_at"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// Relationships
+	User User `json:"user,omitempty" gorm:"foreignKey:UserID"`
+}
+
 // TableName specifies the table name for the User model
 func (User) TableName() string {
 	return "users"
@@ -105,6 +125,11 @@ func (Session) TableName() string {
 // TableName specifies the table name for the AuditLog model
 func (AuditLog) TableName() string {
 	return "audit_logs"
+}
+
+// TableName specifies the table name for the PasswordResetToken model
+func (PasswordResetToken) TableName() string {
+	return "password_reset_tokens"
 }
 
 // BeforeCreate hook to hash password and set default values
@@ -216,4 +241,51 @@ func (u *User) CanAccessCompany(companyID string) bool {
 func (u *User) UpdateLastLogin() {
 	now := time.Now()
 	u.LastLoginAt = &now
+}
+
+// IsAccountLocked checks if the account is currently locked
+func (u *User) IsAccountLocked() bool {
+	if u.LockedUntil == nil {
+		return false
+	}
+	return time.Now().Before(*u.LockedUntil)
+}
+
+// LockAccount locks the account for the specified duration
+func (u *User) LockAccount(duration time.Duration) {
+	lockUntil := time.Now().Add(duration)
+	u.LockedUntil = &lockUntil
+}
+
+// UnlockAccount unlocks the account and resets failed attempts
+func (u *User) UnlockAccount() {
+	u.LockedUntil = nil
+	u.FailedLoginAttempts = 0
+}
+
+// IncrementFailedAttempts increments failed login attempts
+func (u *User) IncrementFailedAttempts() {
+	u.FailedLoginAttempts++
+	if u.FailedLoginAttempts >= 5 {
+		// Lock account for 30 minutes after 5 failed attempts
+		u.LockAccount(30 * time.Minute)
+	}
+}
+
+// ResetFailedAttempts resets failed login attempts
+func (u *User) ResetFailedAttempts() {
+	u.FailedLoginAttempts = 0
+}
+
+// VerifyEmail marks the email as verified
+func (u *User) VerifyEmail() {
+	now := time.Now()
+	u.EmailVerifiedAt = &now
+	u.IsVerified = true
+	u.EmailVerificationToken = ""
+}
+
+// IsEmailVerified checks if the email is verified
+func (u *User) IsEmailVerified() bool {
+	return u.IsVerified && u.EmailVerifiedAt != nil
 }
