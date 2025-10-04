@@ -121,7 +121,7 @@ func (s *VehicleHistoryService) AddVehicleHistory(ctx context.Context, companyID
 	
 	// Convert documents to JSON
 	var documentsJSON json.RawMessage
-	if req.Documents != nil && len(req.Documents) > 0 {
+	if len(req.Documents) > 0 {
 		documentsJSON, err = json.Marshal(req.Documents)
 		if err != nil {
 			return nil, apperrors.NewInternalError("Failed to marshal documents").WithInternal(err)
@@ -436,7 +436,7 @@ func (s *VehicleHistoryService) UpdateVehicleHistory(ctx context.Context, compan
 	
 	// Convert documents to JSON
 	var documentsJSON json.RawMessage
-	if req.Documents != nil && len(req.Documents) > 0 {
+	if len(req.Documents) > 0 {
 		documentsJSON, err = json.Marshal(req.Documents)
 		if err != nil {
 			return nil, apperrors.NewInternalError("Failed to marshal documents").WithInternal(err)

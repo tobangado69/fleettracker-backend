@@ -153,10 +153,6 @@ func NewTestInvoice(companyID string) *models.Invoice {
 	}
 }
 
-// Helper function to create pointer to float64
-func ptrFloat(f float64) *float64 {
-	return &f
-}
 
 // Helper function to create pointer to string
 func PtrString(s string) *string {

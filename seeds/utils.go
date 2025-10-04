@@ -187,6 +187,7 @@ func ptrDate(t time.Time) *time.Time {
 
 // init initializes the random seed
 func init() {
-	rand.Seed(time.Now().UnixNano())
+	// No need to call rand.Seed in Go 1.20+
+	// The global random number generator is automatically seeded
 }
 
