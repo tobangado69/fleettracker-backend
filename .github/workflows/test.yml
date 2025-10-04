@@ -39,6 +39,18 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
+      - name: Wait for database
+        run: |
+          echo "Waiting for database to be ready..."
+          for i in {1..30}; do
+            if pg_isready -h localhost -p 5432 -U fleettracker; then
+              echo "Database is ready!"
+              break
+            fi
+            echo "Waiting for database... ($i/30)"
+            sleep 2
+          done
+
       - name: Run database migrations
         env:
           DATABASE_URL: postgres://fleettracker:password123@localhost:5432/fleettracker?sslmode=disable
@@ -48,6 +60,7 @@ jobs:
 
       - name: Run unit tests
         env:
+          CI: true
           DATABASE_URL: postgres://fleettracker:password123@localhost:5432/fleettracker?sslmode=disable
         run: |
           go test -v -race -coverprofile=coverage.out -covermode=atomic ./internal/auth/...

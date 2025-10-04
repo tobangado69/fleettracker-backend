@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"os"
 	"testing"
 
 	"github.com/tobangado69/fleettracker-pro/backend/pkg/models"
@@ -12,9 +13,17 @@ import (
 // SetupTestDB creates a test database for testing
 // Uses Postgres test database from environment or defaults to test instance
 func SetupTestDB(t *testing.T) (*gorm.DB, func()) {
-	// Hardcode test database URL for now
-	// TODO: Fix the environment variable issue that's adding _test suffix
-	testDBURL := "postgres://fleettracker:password123@host.docker.internal:5432/fleettracker?sslmode=disable"
+	// Get database URL from environment or use default
+	testDBURL := "postgres://fleettracker:password123@localhost:5432/fleettracker?sslmode=disable"
+	
+	// Check if we're in CI environment (GitHub Actions)
+	if os.Getenv("CI") == "true" {
+		// In CI, use localhost instead of host.docker.internal
+		testDBURL = "postgres://fleettracker:password123@localhost:5432/fleettracker?sslmode=disable"
+	} else if os.Getenv("DATABASE_URL") != "" {
+		// Use environment variable if available
+		testDBURL = os.Getenv("DATABASE_URL")
+	}
 
 	// Create database connection
 	db, err := gorm.Open(postgres.Open(testDBURL), &gorm.Config{
