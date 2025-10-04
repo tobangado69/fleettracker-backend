@@ -231,7 +231,4 @@ func SeedVehicles(db *gorm.DB) error {
 }
 
 // Helper functions for pointers
-func ptrDecimal(f float64) *float64 {
-	return &f
-}
 

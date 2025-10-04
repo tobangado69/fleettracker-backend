@@ -265,7 +265,7 @@ func (s *Service) processDriverBehavior(gpsTrack *models.GPSTrack) {
 
 	// Check for speed violations (Indonesian speed limits)
 	if gpsTrack.Speed > 80 { // 80 km/h is typical urban speed limit in Indonesia
-		s.createDriverEvent(models.DriverEvent{
+		if err := s.createDriverEvent(models.DriverEvent{
 			DriverID:    *gpsTrack.DriverID,
 			VehicleID:   gpsTrack.VehicleID,
 			EventType:   "speed_violation",
@@ -274,7 +274,10 @@ func (s *Service) processDriverBehavior(gpsTrack *models.GPSTrack) {
 			Longitude:   gpsTrack.Longitude,
 			Speed:       gpsTrack.Speed,
 			Description: fmt.Sprintf("Speed violation: %.1f km/h", gpsTrack.Speed),
-		})
+		}); err != nil {
+			// Log error but don't fail the GPS tracking
+			fmt.Printf("Failed to create speed violation event: %v\n", err)
+		}
 	}
 
 	// Check for harsh braking
@@ -282,7 +285,7 @@ func (s *Service) processDriverBehavior(gpsTrack *models.GPSTrack) {
 		prevTrack := recentTracks[1]
 		deceleration := (prevTrack.Speed - gpsTrack.Speed) / float64(gpsTrack.Timestamp.Sub(prevTrack.Timestamp).Seconds())
 		if deceleration > 3.5 { // m/s² threshold for harsh braking
-			s.createDriverEvent(models.DriverEvent{
+			if err := s.createDriverEvent(models.DriverEvent{
 				DriverID:    *gpsTrack.DriverID,
 				VehicleID:   gpsTrack.VehicleID,
 				EventType:   "harsh_braking",
@@ -291,7 +294,10 @@ func (s *Service) processDriverBehavior(gpsTrack *models.GPSTrack) {
 				Longitude:   gpsTrack.Longitude,
 				Speed:       gpsTrack.Speed,
 				Description: fmt.Sprintf("Harsh braking: %.2f m/s²", deceleration),
-			})
+			}); err != nil {
+				// Log error but don't fail the GPS tracking
+				fmt.Printf("Failed to create harsh braking event: %v\n", err)
+			}
 		}
 	}
 
@@ -300,7 +306,7 @@ func (s *Service) processDriverBehavior(gpsTrack *models.GPSTrack) {
 		prevTrack := recentTracks[1]
 		acceleration := (gpsTrack.Speed - prevTrack.Speed) / float64(gpsTrack.Timestamp.Sub(prevTrack.Timestamp).Seconds())
 		if acceleration > 2.5 { // m/s² threshold for rapid acceleration
-			s.createDriverEvent(models.DriverEvent{
+			if err := s.createDriverEvent(models.DriverEvent{
 				DriverID:    *gpsTrack.DriverID,
 				VehicleID:   gpsTrack.VehicleID,
 				EventType:   "rapid_acceleration",
@@ -309,7 +315,10 @@ func (s *Service) processDriverBehavior(gpsTrack *models.GPSTrack) {
 				Longitude:   gpsTrack.Longitude,
 				Speed:       gpsTrack.Speed,
 				Description: fmt.Sprintf("Rapid acceleration: %.2f m/s²", acceleration),
-			})
+			}); err != nil {
+				// Log error but don't fail the GPS tracking
+				fmt.Printf("Failed to create rapid acceleration event: %v\n", err)
+			}
 		}
 	}
 }
