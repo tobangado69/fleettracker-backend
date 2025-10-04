@@ -407,6 +407,9 @@ type RepositoryManager struct {
 	auditLogs             AuditLogRepository
 	sessions              SessionRepository
 	passwordResetTokens   PasswordResetTokenRepository
+	invoices              InvoiceRepository
+	payments              PaymentRepository
+	subscriptions         SubscriptionRepository
 }
 
 // NewRepositoryManager creates a new repository manager
@@ -426,6 +429,9 @@ func NewRepositoryManager(db *gorm.DB) *RepositoryManager {
 		auditLogs:           NewAuditLogRepository(db),
 		sessions:            NewSessionRepository(db),
 		passwordResetTokens: NewPasswordResetTokenRepository(db),
+		invoices:            NewInvoiceRepository(db),
+		payments:            NewPaymentRepository(db),
+		subscriptions:       NewSubscriptionRepository(db),
 	}
 }
 
@@ -482,6 +488,34 @@ func (rm *RepositoryManager) GetSessions() SessionRepository {
 // GetPasswordResetTokens returns the password reset token repository
 func (rm *RepositoryManager) GetPasswordResetTokens() PasswordResetTokenRepository {
 	return rm.passwordResetTokens
+}
+
+// GetInvoices returns the invoice repository
+func (rm *RepositoryManager) GetInvoices() InvoiceRepository {
+	return rm.invoices
+}
+
+// GetPayments returns the payment repository
+func (rm *RepositoryManager) GetPayments() PaymentRepository {
+	return rm.payments
+}
+
+// GetSubscriptions returns the subscription repository
+func (rm *RepositoryManager) GetSubscriptions() SubscriptionRepository {
+	return rm.subscriptions
+}
+
+// Convenience methods for payment repositories
+func (rm *RepositoryManager) InvoiceRepository() InvoiceRepository {
+	return rm.invoices
+}
+
+func (rm *RepositoryManager) PaymentRepository() PaymentRepository {
+	return rm.payments
+}
+
+func (rm *RepositoryManager) SubscriptionRepository() SubscriptionRepository {
+	return rm.subscriptions
 }
 
 // HealthCheck performs a health check on the database connection

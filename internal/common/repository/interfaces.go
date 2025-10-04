@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/tobangado69/fleettracker-pro/backend/pkg/models"
 )
@@ -232,4 +233,38 @@ type PasswordResetTokenRepository interface {
 	GetValidToken(ctx context.Context, token string) (*models.PasswordResetToken, error)
 	MarkAsUsed(ctx context.Context, tokenID string) error
 	CleanupExpiredTokens(ctx context.Context) error
+}
+
+// InvoiceRepository defines invoice-specific repository operations
+type InvoiceRepository interface {
+	Repository[models.Invoice]
+	GetByCompany(ctx context.Context, companyID string, pagination Pagination) ([]*models.Invoice, error)
+	GetByInvoiceNumber(ctx context.Context, invoiceNumber string) (*models.Invoice, error)
+	GetByStatus(ctx context.Context, status string, pagination Pagination) ([]*models.Invoice, error)
+	GetOverdueInvoices(ctx context.Context) ([]*models.Invoice, error)
+	GetByDueDateRange(ctx context.Context, startDate, endDate time.Time, pagination Pagination) ([]*models.Invoice, error)
+	UpdatePaymentStatus(ctx context.Context, invoiceID string, status string, paidAmount float64) error
+}
+
+// PaymentRepository defines payment-specific repository operations
+type PaymentRepository interface {
+	Repository[models.Payment]
+	GetByCompany(ctx context.Context, companyID string, pagination Pagination) ([]*models.Payment, error)
+	GetBySubscription(ctx context.Context, subscriptionID string, pagination Pagination) ([]*models.Payment, error)
+	GetByStatus(ctx context.Context, status string, pagination Pagination) ([]*models.Payment, error)
+	GetByPaymentMethod(ctx context.Context, paymentMethod string, pagination Pagination) ([]*models.Payment, error)
+	GetByDateRange(ctx context.Context, startDate, endDate time.Time, pagination Pagination) ([]*models.Payment, error)
+	GetByReferenceNumber(ctx context.Context, referenceNumber string) (*models.Payment, error)
+}
+
+// SubscriptionRepository defines subscription-specific repository operations
+type SubscriptionRepository interface {
+	Repository[models.Subscription]
+	GetByCompany(ctx context.Context, companyID string, pagination Pagination) ([]*models.Subscription, error)
+	GetActiveSubscriptions(ctx context.Context) ([]*models.Subscription, error)
+	GetExpiringSubscriptions(ctx context.Context, days int) ([]*models.Subscription, error)
+	GetByStatus(ctx context.Context, status string, pagination Pagination) ([]*models.Subscription, error)
+	GetByPlanType(ctx context.Context, planType string, pagination Pagination) ([]*models.Subscription, error)
+	UpdateStatus(ctx context.Context, subscriptionID string, status string) error
+	GetCompanyActiveSubscription(ctx context.Context, companyID string) (*models.Subscription, error)
 }

@@ -139,7 +139,7 @@ func main() {
 	trackingService := tracking.NewService(db, redisClient)
 	vehicleService := vehicle.NewService(db)
 	driverService := driver.NewService(db)
-	paymentService := payment.NewService(db, cfg)
+	paymentService := payment.NewService(db, cfg, repoManager)
 
 	// Initialize handlers
 	authHandler := auth.NewHandler(authService)
@@ -308,12 +308,19 @@ func setupRoutes(
 			// Payment integration
 			payments := protected.Group("/payments")
 			{
+				// Manual bank transfer with invoice generation
+				payments.POST("/invoices", paymentHandler.GenerateInvoice)                    // Generate invoice
+				payments.POST("/invoices/:id/confirm", paymentHandler.ConfirmPayment)        // Confirm payment
+				payments.GET("/invoices", paymentHandler.GetInvoices)                        // List invoices
+				payments.GET("/invoices/:id/instructions", paymentHandler.GetPaymentInstructions) // Get payment instructions
+				payments.POST("/subscriptions/billing", paymentHandler.GenerateSubscriptionBilling) // Generate subscription billing
+				
+				// Legacy endpoints (not implemented for manual bank transfer)
 				payments.POST("/qris", paymentHandler.CreateQRISPayment)
 				payments.POST("/bank-transfer", paymentHandler.CreateBankTransfer)
 				payments.POST("/e-wallet", paymentHandler.CreateEWalletPayment)
 				payments.GET("/subscriptions", paymentHandler.GetSubscriptions)
 				payments.POST("/subscriptions", paymentHandler.CreateSubscription)
-				payments.GET("/invoices", paymentHandler.GetInvoices)
 			}
 
 			// Analytics and reporting
