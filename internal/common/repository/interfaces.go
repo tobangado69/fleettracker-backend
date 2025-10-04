@@ -94,14 +94,9 @@ type RepositoryResult[T any] struct {
 type Transaction interface {
 	Commit() error
 	Rollback() error
-	Repository[T any]() Repository[T]
+	GetRepository() *BaseRepository[interface{}]
 }
 
-// TransactionManager manages database transactions
-type TransactionManager interface {
-	Begin(ctx context.Context) (Transaction, error)
-	WithTransaction(ctx context.Context, fn func(Transaction) error) error
-}
 
 // Entity-specific repository interfaces
 

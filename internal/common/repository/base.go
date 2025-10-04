@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 // BaseRepository implements the base repository interface using GORM
@@ -295,11 +294,10 @@ func (t *TransactionImpl) Rollback() error {
 	return t.tx.Rollback().Error
 }
 
-// Repository returns a repository instance within the transaction
-func (t *TransactionImpl) Repository[T any]() Repository[T] {
-	return &BaseRepository[T]{
-		db:    t.tx,
-		model: new(T),
+// GetRepository returns a repository instance within the transaction
+func (t *TransactionImpl) GetRepository() *BaseRepository[interface{}] {
+	return &BaseRepository[interface{}]{
+		db: t.tx,
 	}
 }
 
@@ -407,6 +405,7 @@ type RepositoryManager struct {
 	auditLogs             AuditLogRepository
 	sessions              SessionRepository
 	passwordResetTokens   PasswordResetTokenRepository
+	vehicleHistories      VehicleHistoryRepository
 	invoices              InvoiceRepository
 	payments              PaymentRepository
 	subscriptions         SubscriptionRepository
@@ -429,6 +428,7 @@ func NewRepositoryManager(db *gorm.DB) *RepositoryManager {
 		auditLogs:           NewAuditLogRepository(db),
 		sessions:            NewSessionRepository(db),
 		passwordResetTokens: NewPasswordResetTokenRepository(db),
+		vehicleHistories:    NewVehicleHistoryRepository(db),
 		invoices:            NewInvoiceRepository(db),
 		payments:            NewPaymentRepository(db),
 		subscriptions:       NewSubscriptionRepository(db),
@@ -488,6 +488,11 @@ func (rm *RepositoryManager) GetSessions() SessionRepository {
 // GetPasswordResetTokens returns the password reset token repository
 func (rm *RepositoryManager) GetPasswordResetTokens() PasswordResetTokenRepository {
 	return rm.passwordResetTokens
+}
+
+// GetVehicleHistories returns the vehicle history repository
+func (rm *RepositoryManager) GetVehicleHistories() VehicleHistoryRepository {
+	return rm.vehicleHistories
 }
 
 // GetInvoices returns the invoice repository

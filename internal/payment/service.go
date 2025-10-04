@@ -3,7 +3,6 @@ package payment
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/tobangado69/fleettracker-pro/backend/internal/common/config"
@@ -79,7 +78,7 @@ type SubscriptionBillingRequest struct {
 // GenerateInvoice creates a new invoice with Indonesian compliance
 func (s *Service) GenerateInvoice(ctx context.Context, req *InvoiceRequest) (*InvoiceResponse, error) {
 	// Get company details for NPWP and tax information
-	company, err := s.repoManager.CompanyRepository().FindByID(ctx, req.CompanyID)
+	company, err := s.repoManager.GetCompanies().GetByID(ctx, req.CompanyID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get company: %w", err)
 	}
@@ -166,7 +165,7 @@ func (s *Service) GenerateInvoice(ctx context.Context, req *InvoiceRequest) (*In
 // ConfirmPayment confirms a manual bank transfer payment
 func (s *Service) ConfirmPayment(ctx context.Context, req *PaymentConfirmationRequest, confirmedBy string) error {
 	// Get invoice
-	invoice, err := s.repoManager.InvoiceRepository().FindByID(ctx, req.InvoiceID)
+	invoice, err := s.repoManager.GetInvoices().GetByID(ctx, req.InvoiceID)
 	if err != nil {
 		return fmt.Errorf("failed to get invoice: %w", err)
 	}
@@ -226,17 +225,32 @@ func (s *Service) GetInvoices(ctx context.Context, companyID string, status stri
 		filters["status"] = status
 	}
 
-	return s.repoManager.InvoiceRepository().List(ctx, filters, limit, offset, "created_at DESC")
+	// Create pagination and filter options
+	pagination := repository.Pagination{
+		Page:     1,
+		PageSize: limit,
+		Offset:   offset,
+		Limit:    limit,
+	}
+	
+	filterOptions := repository.FilterOptions{
+		CompanyID: companyID,
+		Conditions: []repository.Condition{
+			{Field: "company_id", Operator: "=", Value: companyID},
+		},
+	}
+	
+	return s.repoManager.GetInvoices().List(ctx, filterOptions, pagination)
 }
 
 // GetPaymentInstructions generates payment instructions for an invoice
 func (s *Service) GetPaymentInstructions(ctx context.Context, invoiceID string) (*PaymentInstructions, error) {
-	invoice, err := s.repoManager.InvoiceRepository().FindByID(ctx, invoiceID)
+	invoice, err := s.repoManager.GetInvoices().GetByID(ctx, invoiceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get invoice: %w", err)
 	}
 
-	company, err := s.repoManager.CompanyRepository().FindByID(ctx, invoice.CompanyID)
+	company, err := s.repoManager.GetCompanies().GetByID(ctx, invoice.CompanyID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get company: %w", err)
 	}
@@ -248,13 +262,13 @@ func (s *Service) GetPaymentInstructions(ctx context.Context, invoiceID string) 
 // GenerateSubscriptionBilling creates automatic billing for subscriptions
 func (s *Service) GenerateSubscriptionBilling(ctx context.Context, req *SubscriptionBillingRequest) error {
 	// Get subscription
-	subscription, err := s.repoManager.SubscriptionRepository().FindByID(ctx, req.SubscriptionID)
+	_, err := s.repoManager.GetSubscriptions().GetByID(ctx, req.SubscriptionID)
 	if err != nil {
 		return fmt.Errorf("failed to get subscription: %w", err)
 	}
 
 	// Parse dates
-	startDate, err := time.Parse("2006-01-02", req.StartDate)
+	_, err = time.Parse("2006-01-02", req.StartDate)
 	if err != nil {
 		return fmt.Errorf("invalid start date: %w", err)
 	}

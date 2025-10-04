@@ -400,8 +400,3 @@ func (r *PasswordResetTokenRepositoryImpl) CleanupExpiredTokens(ctx context.Cont
 	return nil
 }
 
-// Helper function for cosine calculation (used in geofence queries)
-func cos(x float64) float64 {
-	// Simple cosine approximation for small angles
-	return 1.0 - (x*x)/2.0 + (x*x*x*x)/24.0
-}

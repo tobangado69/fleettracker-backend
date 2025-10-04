@@ -102,6 +102,7 @@ func main() {
 		&models.GPSTrack{},
 		&models.Trip{},
 		&models.Geofence{},
+		&models.VehicleHistory{},
 		&models.Subscription{},
 		&models.Payment{},
 		&models.Invoice{},
@@ -138,6 +139,7 @@ func main() {
 	authService := auth.NewService(db, cfg.JWTSecret)
 	trackingService := tracking.NewService(db, redisClient)
 	vehicleService := vehicle.NewService(db)
+	vehicleHistoryService := vehicle.NewVehicleHistoryService(db, repoManager)
 	driverService := driver.NewService(db)
 	paymentService := payment.NewService(db, cfg, repoManager)
 
@@ -145,11 +147,12 @@ func main() {
 	authHandler := auth.NewHandler(authService)
 	trackingHandler := tracking.NewHandler(trackingService)
 	vehicleHandler := vehicle.NewHandler(vehicleService)
+	vehicleHistoryHandler := vehicle.NewVehicleHistoryHandler(vehicleHistoryService)
 	driverHandler := driver.NewHandler(driverService)
 	paymentHandler := payment.NewHandler(paymentService)
 
 	// Setup routes
-	setupRoutes(r, authHandler, trackingHandler, vehicleHandler, driverHandler, paymentHandler, cfg, db, repoManager)
+	setupRoutes(r, authHandler, trackingHandler, vehicleHandler, vehicleHistoryHandler, driverHandler, paymentHandler, cfg, db, repoManager)
 
 	// Setup WebSocket for real-time tracking
 	setupWebSocket(r, trackingService)
@@ -202,6 +205,7 @@ func setupRoutes(
 	authHandler *auth.Handler,
 	trackingHandler *tracking.Handler,
 	vehicleHandler *vehicle.Handler,
+	vehicleHistoryHandler *vehicle.VehicleHistoryHandler,
 	driverHandler *driver.Handler,
 	paymentHandler *payment.Handler,
 	cfg *config.Config,
@@ -246,8 +250,26 @@ func setupRoutes(
 				vehicles.GET("/:id/driver", vehicleHandler.GetVehicleDriver)        // Get vehicle driver
 				vehicles.PUT("/:id/inspection", vehicleHandler.UpdateInspectionDate) // Update inspection date
 				
+				// Vehicle History Management 🚧 **NEW**
+				vehicles.GET("/:id/history", vehicleHistoryHandler.GetVehicleHistory)                    // Get vehicle history
+				vehicles.POST("/:id/history", vehicleHistoryHandler.AddVehicleHistory)                   // Add history entry
+				vehicles.GET("/:id/history/:historyId", vehicleHistoryHandler.GetVehicleHistoryByID)     // Get specific history entry
+				vehicles.PUT("/:id/history/:historyId", vehicleHistoryHandler.UpdateVehicleHistory)      // Update history entry
+				vehicles.DELETE("/:id/history/:historyId", vehicleHistoryHandler.DeleteVehicleHistory)   // Delete history entry
+				vehicles.GET("/:id/maintenance", vehicleHistoryHandler.GetMaintenanceHistory)            // Get maintenance history
+				vehicles.GET("/:id/costs", vehicleHistoryHandler.GetCostSummary)                         // Get cost summary
+				vehicles.GET("/:id/trends", vehicleHistoryHandler.GetMaintenanceTrends)                  // Get maintenance trends
+				
 				// Legacy endpoints for backward compatibility
 				vehicles.GET("/:id/status", vehicleHandler.GetVehicleStatus)
+			}
+			
+			// Vehicle Maintenance Management 🚧 **NEW**
+			maintenance := protected.Group("/vehicles/maintenance")
+			{
+				maintenance.GET("/upcoming", vehicleHistoryHandler.GetUpcomingMaintenance)               // Get upcoming maintenance
+				maintenance.GET("/overdue", vehicleHistoryHandler.GetOverdueMaintenance)                 // Get overdue maintenance
+				maintenance.PUT("/:historyId/schedule", vehicleHistoryHandler.UpdateMaintenanceSchedule) // Update maintenance schedule
 			}
 
 			// Driver management
