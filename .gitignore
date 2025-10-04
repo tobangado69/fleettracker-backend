@@ -9,9 +9,11 @@
 *.dll
 *.so
 *.dylib
-main
-server
-seed
+/main
+/server
+/seed
+cmd/server/main
+cmd/seed/seed
 
 # Test binary, built with `go test -c`
 *.test
