@@ -40,6 +40,9 @@ WORKDIR /app
 # Copy binary from builder stage
 COPY --from=builder /app/main .
 
+# Copy Swagger documentation
+COPY --from=builder /app/docs ./docs
+
 # Copy configuration files (if exists)
 # COPY --from=builder /app/.env.example .env.example
 

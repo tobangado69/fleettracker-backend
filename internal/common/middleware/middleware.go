@@ -161,11 +161,19 @@ func CompanyAccess() gin.HandlerFunc {
 // SecurityHeaders middleware adds security headers
 func SecurityHeaders() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Allow Swagger UI to work by relaxing CSP for /swagger/* paths
+		if strings.HasPrefix(c.Request.URL.Path, "/swagger/") {
+			// Relaxed CSP for Swagger UI
+			c.Header("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:")
+		} else {
+			// Strict CSP for other paths
+			c.Header("Content-Security-Policy", "default-src 'self'")
+		}
+		
 		c.Header("X-Frame-Options", "DENY")
 		c.Header("X-Content-Type-Options", "nosniff")
 		c.Header("X-XSS-Protection", "1; mode=block")
 		c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-		c.Header("Content-Security-Policy", "default-src 'self'")
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
 		c.Header("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
 		
