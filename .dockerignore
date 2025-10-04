@@ -1,0 +1,67 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Documentation (keep docs/ for Swagger!)
+*.md
+!docs/
+
+# Development files
+.env
+.env.local
+.vscode
+.idea
+
+# Test files
+*_test.go
+test/
+coverage.txt
+
+# Build artifacts
+bin/
+dist/
+*.exe
+server.exe
+main
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Backups
+backups/
+*.sql
+
+# Docker files (not needed inside container)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Makefile (not needed inside container)
+Makefile
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Node modules (if any)
+node_modules/
+
+# Keep these important directories:
+# - docs/       (Swagger documentation) ✅
+# - internal/   (source code) ✅
+# - cmd/        (source code) ✅
+# - pkg/        (source code) ✅
+# - go.mod      (dependencies) ✅
+# - go.sum      (dependencies) ✅
+

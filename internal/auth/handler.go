@@ -6,6 +6,48 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// SuccessResponse represents a success response
+type SuccessResponse struct {
+	Success bool        `json:"success" example:"true"`
+	Data    interface{} `json:"data,omitempty"`
+	Message string      `json:"message,omitempty" example:"Operation successful"`
+}
+
+// ErrorResponse represents an error response
+type ErrorResponse struct {
+	Error   string `json:"error" example:"Bad Request"`
+	Message string `json:"message" example:"Invalid request data"`
+}
+
+// ValidationErrorResponse represents a validation error response
+type ValidationErrorResponse struct {
+	Error   string                 `json:"error" example:"Validation Error"`
+	Message string                 `json:"message" example:"Request validation failed"`
+	Details map[string]interface{} `json:"details,omitempty"`
+}
+
+// RefreshTokenRequest represents refresh token request
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
+}
+
+// ChangePasswordRequest represents password change request
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password" binding:"required" example:"oldPassword123"`
+	NewPassword     string `json:"new_password" binding:"required,min=8" example:"newPassword123"`
+}
+
+// ForgotPasswordRequest represents forgot password request
+type ForgotPasswordRequest struct {
+	Email string `json:"email" binding:"required,email" example:"user@example.com"`
+}
+
+// ResetPasswordRequest represents password reset request
+type ResetPasswordRequest struct {
+	Token       string `json:"token" binding:"required" example:"reset_token_123"`
+	NewPassword string `json:"new_password" binding:"required,min=8" example:"newPassword123"`
+}
+
 // Handler handles authentication HTTP requests
 type Handler struct {
 	service *Service
@@ -19,6 +61,16 @@ func NewHandler(service *Service) *Handler {
 }
 
 // Register handles user registration
+// @Summary Register new user
+// @Description Register a new user account with Indonesian compliance validation
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body RegisterRequest true "User registration data"
+// @Success 201 {object} SuccessResponse{data=UserResponse}
+// @Failure 400 {object} ErrorResponse
+// @Failure 422 {object} ValidationErrorResponse
+// @Router /api/v1/auth/register [post]
 func (h *Handler) Register(c *gin.Context) {
 	var req RegisterRequest
 
@@ -46,6 +98,16 @@ func (h *Handler) Register(c *gin.Context) {
 }
 
 // Login handles user login
+// @Summary User login
+// @Description Authenticate user with email and password, returns JWT tokens
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body LoginRequest true "Login credentials"
+// @Success 200 {object} SuccessResponse{data=UserResponse}
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Router /api/v1/auth/login [post]
 func (h *Handler) Login(c *gin.Context) {
 	var req LoginRequest
 
@@ -74,6 +136,16 @@ func (h *Handler) Login(c *gin.Context) {
 }
 
 // RefreshToken handles token refresh
+// @Summary Refresh JWT token
+// @Description Refresh access token using refresh token
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body RefreshTokenRequest true "Refresh token data"
+// @Success 200 {object} SuccessResponse{data=TokenResponse}
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Router /api/v1/auth/refresh [post]
 func (h *Handler) RefreshToken(c *gin.Context) {
 	var req struct {
 		RefreshToken string `json:"refresh_token" binding:"required"`
@@ -103,6 +175,16 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 }
 
 // Logout handles user logout
+// @Summary User logout
+// @Description Logout user and invalidate JWT token
+// @Tags auth
+// @Produce json
+// @Success 200 {object} SuccessResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/auth/logout [post]
+// @Security BearerAuth
 func (h *Handler) Logout(c *gin.Context) {
 	// Get access token from Authorization header
 	authHeader := c.GetHeader("Authorization")
@@ -135,6 +217,15 @@ func (h *Handler) Logout(c *gin.Context) {
 }
 
 // GetProfile handles getting user profile
+// @Summary Get user profile
+// @Description Get current user profile information
+// @Tags auth
+// @Produce json
+// @Success 200 {object} SuccessResponse{data=UserResponse}
+// @Failure 401 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Router /api/v1/auth/profile [get]
+// @Security BearerAuth
 func (h *Handler) GetProfile(c *gin.Context) {
 	// Get user ID from JWT claims (set by middleware)
 	userID, exists := c.Get("user_id")
@@ -161,6 +252,17 @@ func (h *Handler) GetProfile(c *gin.Context) {
 }
 
 // UpdateProfile handles updating user profile
+// @Summary Update user profile
+// @Description Update current user profile information
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param updates body map[string]interface{} true "Profile updates"
+// @Success 200 {object} SuccessResponse{data=UserResponse}
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Router /api/v1/auth/profile [put]
+// @Security BearerAuth
 func (h *Handler) UpdateProfile(c *gin.Context) {
 	// Get user ID from JWT claims (set by middleware)
 	userID, exists := c.Get("user_id")
@@ -197,6 +299,17 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 }
 
 // ChangePassword handles changing user password
+// @Summary Change user password
+// @Description Change current user password with validation
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body ChangePasswordRequest true "Password change data"
+// @Success 200 {object} SuccessResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Router /api/v1/auth/change-password [put]
+// @Security BearerAuth
 func (h *Handler) ChangePassword(c *gin.Context) {
 	// Get user ID from JWT claims (set by middleware)
 	userID, exists := c.Get("user_id")
@@ -236,6 +349,16 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 }
 
 // ForgotPassword handles forgot password request
+// @Summary Request password reset
+// @Description Send password reset email to user
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body ForgotPasswordRequest true "Email address"
+// @Success 200 {object} SuccessResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/auth/forgot-password [post]
 func (h *Handler) ForgotPassword(c *gin.Context) {
 	var req struct {
 		Email string `json:"email" binding:"required,email"`
@@ -264,6 +387,15 @@ func (h *Handler) ForgotPassword(c *gin.Context) {
 }
 
 // ResetPassword handles password reset with token
+// @Summary Reset password with token
+// @Description Reset user password using reset token
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body ResetPasswordRequest true "Password reset data"
+// @Success 200 {object} SuccessResponse
+// @Failure 400 {object} ErrorResponse
+// @Router /api/v1/auth/reset-password [post]
 func (h *Handler) ResetPassword(c *gin.Context) {
 	var req struct {
 		Token       string `json:"token" binding:"required"`

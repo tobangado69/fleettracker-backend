@@ -1,0 +1,3549 @@
+basePath: /api/v1
+definitions:
+  analytics.ErrorResponse:
+    properties:
+      error:
+        type: string
+      message:
+        type: string
+    type: object
+  analytics.SuccessResponse:
+    properties:
+      data: {}
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  auth.ChangePasswordRequest:
+    properties:
+      current_password:
+        example: oldPassword123
+        type: string
+      new_password:
+        example: newPassword123
+        minLength: 8
+        type: string
+    required:
+    - current_password
+    - new_password
+    type: object
+  auth.ErrorResponse:
+    properties:
+      error:
+        example: Bad Request
+        type: string
+      message:
+        example: Invalid request data
+        type: string
+    type: object
+  auth.ForgotPasswordRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+    required:
+    - email
+    type: object
+  auth.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  auth.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+    required:
+    - refresh_token
+    type: object
+  auth.RegisterRequest:
+    properties:
+      company_id:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      last_name:
+        type: string
+      password:
+        minLength: 8
+        type: string
+      phone:
+        type: string
+      role:
+        description: Optional, defaults to operator
+        type: string
+      username:
+        maxLength: 50
+        minLength: 3
+        type: string
+    required:
+    - company_id
+    - email
+    - first_name
+    - last_name
+    - password
+    - username
+    type: object
+  auth.ResetPasswordRequest:
+    properties:
+      new_password:
+        example: newPassword123
+        minLength: 8
+        type: string
+      token:
+        example: reset_token_123
+        type: string
+    required:
+    - new_password
+    - token
+    type: object
+  auth.SuccessResponse:
+    properties:
+      data: {}
+      message:
+        example: Operation successful
+        type: string
+      success:
+        example: true
+        type: boolean
+    type: object
+  auth.TokenResponse:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+      refresh_token:
+        type: string
+      token_type:
+        type: string
+    type: object
+  auth.UserResponse:
+    properties:
+      company_id:
+        type: string
+      created_at:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      is_verified:
+        type: boolean
+      last_login_at:
+        type: string
+      last_name:
+        type: string
+      phone:
+        type: string
+      role:
+        type: string
+      username:
+        type: string
+    type: object
+  auth.ValidationErrorResponse:
+    properties:
+      details:
+        additionalProperties: true
+        type: object
+      error:
+        example: Validation Error
+        type: string
+      message:
+        example: Request validation failed
+        type: string
+    type: object
+  driver.CreateDriverRequest:
+    properties:
+      address:
+        maxLength: 255
+        minLength: 10
+        type: string
+      city:
+        maxLength: 100
+        minLength: 2
+        type: string
+      date_of_birth:
+        type: string
+      email:
+        type: string
+      first_name:
+        maxLength: 100
+        minLength: 2
+        type: string
+      hire_date:
+        type: string
+      last_name:
+        maxLength: 100
+        minLength: 2
+        type: string
+      medical_checkup_date:
+        type: string
+      nik:
+        description: Indonesian Compliance Fields
+        type: string
+      phone_number:
+        maxLength: 15
+        minLength: 10
+        type: string
+      province:
+        maxLength: 100
+        minLength: 2
+        type: string
+      sim_expiry:
+        type: string
+      sim_number:
+        maxLength: 20
+        minLength: 10
+        type: string
+      training_completed:
+        type: boolean
+      training_expiry:
+        type: string
+    required:
+    - address
+    - city
+    - date_of_birth
+    - email
+    - first_name
+    - hire_date
+    - last_name
+    - nik
+    - phone_number
+    - province
+    - sim_number
+    type: object
+  driver.ErrorResponse:
+    properties:
+      error:
+        type: string
+      message:
+        type: string
+    type: object
+  driver.Meta:
+    properties:
+      has_next:
+        type: boolean
+      has_previous:
+        type: boolean
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  driver.PaginatedResponse:
+    properties:
+      data: {}
+      meta:
+        $ref: '#/definitions/driver.Meta'
+      success:
+        type: boolean
+    type: object
+  driver.SuccessResponse:
+    properties:
+      data: {}
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  driver.UpdateDriverRequest:
+    properties:
+      address:
+        maxLength: 255
+        minLength: 10
+        type: string
+      city:
+        maxLength: 100
+        minLength: 2
+        type: string
+      date_of_birth:
+        type: string
+      efficiency_score:
+        maximum: 100
+        minimum: 0
+        type: number
+      email:
+        type: string
+      employment_status:
+        enum:
+        - active
+        - suspended
+        - terminated
+        type: string
+      first_name:
+        maxLength: 100
+        minLength: 2
+        type: string
+      hire_date:
+        type: string
+      is_active:
+        type: boolean
+      last_name:
+        maxLength: 100
+        minLength: 2
+        type: string
+      medical_checkup_date:
+        type: string
+      nik:
+        description: Indonesian Compliance Fields
+        type: string
+      performance_score:
+        description: Performance Fields
+        maximum: 100
+        minimum: 0
+        type: number
+      phone_number:
+        maxLength: 15
+        minLength: 10
+        type: string
+      province:
+        maxLength: 100
+        minLength: 2
+        type: string
+      safety_score:
+        maximum: 100
+        minimum: 0
+        type: number
+      sim_expiry:
+        type: string
+      sim_number:
+        maxLength: 20
+        minLength: 10
+        type: string
+      status:
+        enum:
+        - available
+        - busy
+        - inactive
+        - suspended
+        - terminated
+        type: string
+      training_completed:
+        type: boolean
+      training_expiry:
+        type: string
+    type: object
+  payment.ErrorResponse:
+    properties:
+      details:
+        example: Validation failed
+        type: string
+      error:
+        example: Bad Request
+        type: string
+      message:
+        example: Invalid request data
+        type: string
+    type: object
+  payment.InvoiceRequest:
+    properties:
+      billing_period:
+        type: string
+      company_id:
+        type: string
+      due_date:
+        type: string
+      notes:
+        type: string
+      subscription_id:
+        type: string
+    required:
+    - billing_period
+    - company_id
+    type: object
+  payment.InvoiceResponse:
+    properties:
+      due_date:
+        type: string
+      invoice_id:
+        type: string
+      invoice_number:
+        type: string
+      invoice_pdf:
+        description: Base64 encoded PDF
+        type: string
+      payment_instructions:
+        $ref: '#/definitions/payment.PaymentInstructions'
+      subtotal:
+        type: number
+      tax_amount:
+        type: number
+      total_amount:
+        type: number
+    type: object
+  payment.PaymentConfirmationRequest:
+    properties:
+      bank_account:
+        type: string
+      invoice_id:
+        type: string
+      notes:
+        type: string
+      reference_number:
+        type: string
+      transfer_amount:
+        type: number
+      transfer_date:
+        type: string
+    required:
+    - bank_account
+    - invoice_id
+    - transfer_amount
+    - transfer_date
+    type: object
+  payment.PaymentInstructions:
+    properties:
+      account_holder:
+        type: string
+      account_number:
+        type: string
+      amount:
+        type: string
+      bank_name:
+        type: string
+      reference_code:
+        type: string
+      transfer_note:
+        type: string
+    type: object
+  payment.SubscriptionBillingRequest:
+    properties:
+      billing_cycle:
+        description: monthly, yearly
+        type: string
+      company_id:
+        type: string
+      end_date:
+        type: string
+      start_date:
+        type: string
+      subscription_id:
+        type: string
+    required:
+    - billing_cycle
+    - company_id
+    - end_date
+    - start_date
+    - subscription_id
+    type: object
+  payment.SuccessResponse:
+    properties:
+      data: {}
+      message:
+        example: Operation successful
+        type: string
+      success:
+        example: true
+        type: boolean
+    type: object
+  tracking.DriverEventRequest:
+    properties:
+      details:
+        type: string
+      driver_id:
+        type: string
+      event_type:
+        enum:
+        - speed_violation
+        - harsh_braking
+        - rapid_acceleration
+        - sharp_cornering
+        - idle_time
+        - driving_hours_violation
+        type: string
+      latitude:
+        type: number
+      longitude:
+        type: number
+      severity:
+        enum:
+        - low
+        - medium
+        - high
+        - critical
+        type: string
+      speed:
+        type: number
+      timestamp:
+        type: string
+      value:
+        description: Speed, acceleration, etc.
+        type: number
+      vehicle_id:
+        type: string
+    required:
+    - driver_id
+    - event_type
+    - latitude
+    - longitude
+    - severity
+    - timestamp
+    - vehicle_id
+    type: object
+  tracking.ErrorResponse:
+    properties:
+      error:
+        type: string
+      message:
+        type: string
+    type: object
+  tracking.GPSDataRequest:
+    properties:
+      accuracy:
+        description: meters
+        maximum: 100
+        minimum: 0
+        type: number
+      altitude:
+        type: number
+      battery_level:
+        maximum: 100
+        minimum: 0
+        type: number
+      driver_id:
+        type: string
+      heading:
+        maximum: 360
+        minimum: 0
+        type: number
+      is_offline_sync:
+        type: boolean
+      latitude:
+        maximum: 90
+        minimum: -90
+        type: number
+      longitude:
+        maximum: 180
+        minimum: -180
+        type: number
+      network_type:
+        description: 4G, 5G, WiFi
+        type: string
+      speed:
+        description: km/h
+        maximum: 200
+        minimum: 0
+        type: number
+      timestamp:
+        type: string
+      vehicle_id:
+        type: string
+    required:
+    - driver_id
+    - latitude
+    - longitude
+    - timestamp
+    - vehicle_id
+    type: object
+  tracking.GeofenceRequest:
+    properties:
+      alert_on_entry:
+        type: boolean
+      alert_on_exit:
+        type: boolean
+      center_lat:
+        maximum: 90
+        minimum: -90
+        type: number
+      center_lng:
+        maximum: 180
+        minimum: -180
+        type: number
+      company_id:
+        type: string
+      description:
+        type: string
+      is_active:
+        type: boolean
+      name:
+        type: string
+      radius:
+        description: meters
+        maximum: 10000
+        minimum: 10
+        type: number
+      type:
+        enum:
+        - zone
+        - pickup
+        - delivery
+        - restricted
+        type: string
+    required:
+    - center_lat
+    - center_lng
+    - company_id
+    - name
+    - radius
+    - type
+    type: object
+  tracking.Location:
+    properties:
+      address:
+        type: string
+      latitude:
+        type: number
+      longitude:
+        type: number
+    type: object
+  tracking.Meta:
+    properties:
+      has_next:
+        type: boolean
+      has_previous:
+        type: boolean
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  tracking.PaginatedResponse:
+    properties:
+      data: {}
+      meta:
+        $ref: '#/definitions/tracking.Meta'
+      success:
+        type: boolean
+    type: object
+  tracking.SuccessResponse:
+    properties:
+      data: {}
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  tracking.TripRequest:
+    properties:
+      action:
+        enum:
+        - start
+        - end
+        type: string
+      driver_id:
+        type: string
+      end_location:
+        $ref: '#/definitions/tracking.Location'
+      odometer_end:
+        type: number
+      odometer_start:
+        type: number
+      start_location:
+        $ref: '#/definitions/tracking.Location'
+      timestamp:
+        type: string
+      vehicle_id:
+        type: string
+    required:
+    - action
+    - driver_id
+    - timestamp
+    - vehicle_id
+    type: object
+  vehicle.CreateVehicleRequest:
+    properties:
+      bpkb_number:
+        maxLength: 20
+        minLength: 10
+        type: string
+      color:
+        maxLength: 50
+        minLength: 2
+        type: string
+      current_odometer:
+        minimum: 0
+        type: integer
+      driver_id:
+        type: string
+      fuel_type:
+        enum:
+        - gasoline
+        - diesel
+        - electric
+        - hybrid
+        type: string
+      insurance_policy_number:
+        maxLength: 50
+        minLength: 5
+        type: string
+      last_inspection_date:
+        type: string
+      license_plate:
+        maxLength: 20
+        minLength: 5
+        type: string
+      make:
+        maxLength: 100
+        minLength: 2
+        type: string
+      model:
+        maxLength: 100
+        minLength: 2
+        type: string
+      purchase_date:
+        type: string
+      stnk_number:
+        description: Indonesian Compliance Fields
+        maxLength: 20
+        minLength: 10
+        type: string
+      vin:
+        type: string
+      year:
+        maximum: 2030
+        minimum: 1900
+        type: integer
+    required:
+    - bpkb_number
+    - color
+    - fuel_type
+    - insurance_policy_number
+    - license_plate
+    - make
+    - model
+    - stnk_number
+    - vin
+    - year
+    type: object
+  vehicle.ErrorResponse:
+    properties:
+      error:
+        type: string
+      message:
+        type: string
+    type: object
+  vehicle.Meta:
+    properties:
+      has_next:
+        type: boolean
+      has_previous:
+        type: boolean
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  vehicle.PaginatedResponse:
+    properties:
+      data: {}
+      meta:
+        $ref: '#/definitions/vehicle.Meta'
+      success:
+        type: boolean
+    type: object
+  vehicle.SuccessResponse:
+    properties:
+      data: {}
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  vehicle.UpdateVehicleRequest:
+    properties:
+      bpkb_number:
+        maxLength: 20
+        minLength: 10
+        type: string
+      color:
+        maxLength: 50
+        minLength: 2
+        type: string
+      current_odometer:
+        minimum: 0
+        type: integer
+      driver_id:
+        type: string
+      fuel_type:
+        enum:
+        - gasoline
+        - diesel
+        - electric
+        - hybrid
+        type: string
+      insurance_policy_number:
+        maxLength: 50
+        minLength: 5
+        type: string
+      is_active:
+        type: boolean
+      is_gps_enabled:
+        type: boolean
+      last_inspection_date:
+        type: string
+      license_plate:
+        maxLength: 20
+        minLength: 5
+        type: string
+      make:
+        maxLength: 100
+        minLength: 2
+        type: string
+      model:
+        maxLength: 100
+        minLength: 2
+        type: string
+      purchase_date:
+        type: string
+      status:
+        enum:
+        - active
+        - maintenance
+        - retired
+        - inactive
+        type: string
+      stnk_number:
+        description: Indonesian Compliance Fields
+        maxLength: 20
+        minLength: 10
+        type: string
+      vin:
+        type: string
+      year:
+        maximum: 2030
+        minimum: 1900
+        type: integer
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@fleettracker.id
+    name: FleetTracker Pro Support
+    url: https://fleettracker.id/support
+  description: Comprehensive Driver Tracking SaaS Application for Indonesian Fleet
+    Management
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: https://fleettracker.id/terms
+  title: FleetTracker Pro API
+  version: "1.0"
+paths:
+  /api/v1/analytics/dashboard:
+    get:
+      description: Get real-time fleet operations dashboard data
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/analytics.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/analytics.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get fleet operations dashboard
+      tags:
+      - analytics
+  /api/v1/analytics/dashboard/realtime:
+    get:
+      description: Get real-time fleet operations dashboard data
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/analytics.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/analytics.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get real-time dashboard updates
+      tags:
+      - analytics
+  /api/v1/analytics/drivers/behavior:
+    get:
+      description: Get detailed driver behavior analysis and metrics
+      parameters:
+      - description: Driver ID
+        in: query
+        name: driver_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/analytics.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/analytics.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get driver behavior analysis
+      tags:
+      - analytics
+  /api/v1/analytics/drivers/performance:
+    get:
+      description: Get driver performance analytics and scoring
+      parameters:
+      - description: Driver ID
+        in: query
+        name: driver_id
+        type: string
+      - description: Period (daily, weekly, monthly)
+        in: query
+        name: period
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/analytics.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/analytics.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get driver performance analytics
+      tags:
+      - analytics
+  /api/v1/analytics/drivers/ranking:
+    get:
+      description: Get driver performance ranking and leaderboard
+      parameters:
+      - description: Number of drivers to return
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/analytics.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/analytics.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get driver ranking
+      tags:
+      - analytics
+  /api/v1/analytics/drivers/recommendations:
+    get:
+      description: Get personalized training recommendations for drivers
+      parameters:
+      - description: Driver ID
+        in: query
+        name: driver_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/analytics.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/analytics.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get driver training recommendations
+      tags:
+      - analytics
+  /api/v1/analytics/fleet/costs:
+    get:
+      description: Get fleet cost analysis and financial metrics
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/analytics.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/analytics.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get fleet cost analysis
+      tags:
+      - analytics
+  /api/v1/analytics/fleet/maintenance:
+    get:
+      description: Get maintenance scheduling insights and alerts
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/analytics.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/analytics.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get maintenance insights
+      tags:
+      - analytics
+  /api/v1/analytics/fleet/utilization:
+    get:
+      description: Get fleet utilization rates and efficiency metrics
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/analytics.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/analytics.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get fleet utilization analytics
+      tags:
+      - analytics
+  /api/v1/analytics/fuel/consumption:
+    get:
+      description: Get fuel consumption analytics and reports
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/analytics.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/analytics.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get fuel consumption analytics
+      tags:
+      - analytics
+  /api/v1/analytics/fuel/efficiency:
+    get:
+      description: Get fuel efficiency metrics and optimization recommendations
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/analytics.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/analytics.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get fuel efficiency metrics
+      tags:
+      - analytics
+  /api/v1/analytics/fuel/optimization:
+    get:
+      description: Get fuel optimization recommendations and cost savings tips
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/analytics.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/analytics.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get fuel optimization recommendations
+      tags:
+      - analytics
+  /api/v1/analytics/fuel/theft:
+    get:
+      description: Get fuel theft detection alerts and suspicious activities
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/analytics.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/analytics.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get fuel theft alerts
+      tags:
+      - analytics
+  /api/v1/analytics/reports/compliance:
+    get:
+      description: Get Indonesian regulatory compliance report
+      parameters:
+      - description: Report period (monthly, quarterly, yearly)
+        in: query
+        name: period
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/analytics.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/analytics.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get compliance report
+      tags:
+      - analytics
+  /api/v1/analytics/reports/export/{id}:
+    get:
+      description: Export analytics report in various formats
+      parameters:
+      - description: Report ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Export format (csv, pdf, excel)
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/analytics.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/analytics.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Export analytics report
+      tags:
+      - analytics
+  /api/v1/analytics/reports/generate:
+    post:
+      description: Generate comprehensive analytics report in various formats
+      parameters:
+      - description: Report type (fuel, driver, fleet, compliance)
+        in: query
+        name: type
+        type: string
+      - description: Report format (json, csv, pdf)
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/analytics.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/analytics.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Generate analytics report
+      tags:
+      - analytics
+  /api/v1/auth/change-password:
+    put:
+      consumes:
+      - application/json
+      description: Change current user password with validation
+      parameters:
+      - description: Password change data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change user password
+      tags:
+      - auth
+  /api/v1/auth/forgot-password:
+    post:
+      consumes:
+      - application/json
+      description: Send password reset email to user
+      parameters:
+      - description: Email address
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.ForgotPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      summary: Request password reset
+      tags:
+      - auth
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user with email and password, returns JWT tokens
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/auth.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/auth.UserResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      summary: User login
+      tags:
+      - auth
+  /api/v1/auth/logout:
+    post:
+      description: Logout user and invalidate JWT token
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: User logout
+      tags:
+      - auth
+  /api/v1/auth/profile:
+    get:
+      description: Get current user profile information
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/auth.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/auth.UserResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user profile
+      tags:
+      - auth
+    put:
+      consumes:
+      - application/json
+      description: Update current user profile information
+      parameters:
+      - description: Profile updates
+        in: body
+        name: updates
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/auth.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/auth.UserResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update user profile
+      tags:
+      - auth
+  /api/v1/auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Refresh access token using refresh token
+      parameters:
+      - description: Refresh token data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/auth.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/auth.TokenResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      summary: Refresh JWT token
+      tags:
+      - auth
+  /api/v1/auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user account with Indonesian compliance validation
+      parameters:
+      - description: User registration data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/auth.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/auth.UserResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/auth.ValidationErrorResponse'
+      summary: Register new user
+      tags:
+      - auth
+  /api/v1/auth/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: Reset user password using reset token
+      parameters:
+      - description: Password reset data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      summary: Reset password with token
+      tags:
+      - auth
+  /api/v1/drivers:
+    get:
+      description: List drivers with filters and pagination
+      parameters:
+      - description: Driver status
+        in: query
+        name: status
+        type: string
+      - description: Employment status
+        in: query
+        name: employment_status
+        type: string
+      - description: Performance grade (A, B, C, D, F)
+        in: query
+        name: performance_grade
+        type: string
+      - description: City
+        in: query
+        name: city
+        type: string
+      - description: Province
+        in: query
+        name: province
+        type: string
+      - description: Has vehicle assigned
+        in: query
+        name: has_vehicle
+        type: boolean
+      - description: Is available
+        in: query
+        name: is_available
+        type: boolean
+      - description: Is compliant
+        in: query
+        name: is_compliant
+        type: boolean
+      - description: Search term
+        in: query
+        name: search
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - default: created_at
+        description: Sort field
+        in: query
+        name: sort_by
+        type: string
+      - default: desc
+        description: Sort order
+        in: query
+        name: sort_order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/driver.PaginatedResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List drivers
+      tags:
+      - drivers
+    post:
+      consumes:
+      - application/json
+      description: Create a new driver with Indonesian compliance validation
+      parameters:
+      - description: Driver data
+        in: body
+        name: driver
+        required: true
+        schema:
+          $ref: '#/definitions/driver.CreateDriverRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/driver.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a new driver
+      tags:
+      - drivers
+  /api/v1/drivers/{id}:
+    delete:
+      description: Delete driver (soft delete)
+      parameters:
+      - description: Driver ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/driver.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete driver
+      tags:
+      - drivers
+    get:
+      description: Get driver details by ID
+      parameters:
+      - description: Driver ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/driver.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get driver by ID
+      tags:
+      - drivers
+    put:
+      consumes:
+      - application/json
+      description: Update driver information
+      parameters:
+      - description: Driver ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Driver update data
+        in: body
+        name: driver
+        required: true
+        schema:
+          $ref: '#/definitions/driver.UpdateDriverRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/driver.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update driver
+      tags:
+      - drivers
+  /api/v1/drivers/{id}/assign-vehicle:
+    post:
+      consumes:
+      - application/json
+      description: Assign a vehicle to a driver
+      parameters:
+      - description: Driver ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Vehicle assignment data
+        in: body
+        name: assignment
+        required: true
+        schema:
+          properties:
+            vehicle_id:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/driver.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Assign vehicle to driver
+      tags:
+      - drivers
+  /api/v1/drivers/{id}/medical:
+    put:
+      consumes:
+      - application/json
+      description: Update driver medical checkup date
+      parameters:
+      - description: Driver ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Medical checkup data
+        in: body
+        name: medical
+        required: true
+        schema:
+          properties:
+            medical_checkup_date:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/driver.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update driver medical checkup
+      tags:
+      - drivers
+  /api/v1/drivers/{id}/performance:
+    get:
+      description: Get driver performance data and analytics
+      parameters:
+      - description: Driver ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/driver.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get driver performance
+      tags:
+      - drivers
+    put:
+      consumes:
+      - application/json
+      description: Update driver performance scores
+      parameters:
+      - description: Driver ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Performance data
+        in: body
+        name: performance
+        required: true
+        schema:
+          properties:
+            efficiency_score:
+              type: number
+            performance_score:
+              type: number
+            safety_score:
+              type: number
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/driver.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update driver performance
+      tags:
+      - drivers
+  /api/v1/drivers/{id}/status:
+    put:
+      consumes:
+      - application/json
+      description: Update driver status (available, busy, inactive, suspended, terminated)
+      parameters:
+      - description: Driver ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Status update data
+        in: body
+        name: status
+        required: true
+        schema:
+          properties:
+            reason:
+              type: string
+            status:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/driver.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update driver status
+      tags:
+      - drivers
+  /api/v1/drivers/{id}/training:
+    put:
+      consumes:
+      - application/json
+      description: Update driver training completion and expiry
+      parameters:
+      - description: Driver ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Training data
+        in: body
+        name: training
+        required: true
+        schema:
+          properties:
+            training_completed:
+              type: boolean
+            training_expiry:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/driver.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update driver training status
+      tags:
+      - drivers
+  /api/v1/drivers/{id}/vehicle:
+    delete:
+      description: Remove vehicle assignment from driver
+      parameters:
+      - description: Driver ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/driver.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Unassign vehicle from driver
+      tags:
+      - drivers
+    get:
+      description: Get the vehicle assigned to a driver
+      parameters:
+      - description: Driver ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/driver.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/driver.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get driver vehicle
+      tags:
+      - drivers
+  /api/v1/payments/bank-transfer:
+    post:
+      consumes:
+      - application/json
+      description: Create direct bank transfer - not implemented, use invoice generation
+        and manual confirmation
+      produces:
+      - application/json
+      responses:
+        "501":
+          description: Not Implemented
+          schema:
+            $ref: '#/definitions/payment.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create bank transfer payment (Not Implemented)
+      tags:
+      - payments
+  /api/v1/payments/e-wallet:
+    post:
+      consumes:
+      - application/json
+      description: Create e-wallet payment - not supported, using manual bank transfer
+        instead
+      produces:
+      - application/json
+      responses:
+        "501":
+          description: Not Implemented
+          schema:
+            $ref: '#/definitions/payment.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create e-wallet payment (Not Implemented)
+      tags:
+      - payments
+  /api/v1/payments/invoices:
+    get:
+      description: Retrieve invoices for the authenticated company with filtering
+        and pagination
+      parameters:
+      - description: Invoice status (pending, paid, overdue, cancelled)
+        in: query
+        name: status
+        type: string
+      - description: 'Number of invoices to return (default: 20)'
+        in: query
+        name: limit
+        type: integer
+      - description: 'Number of invoices to skip (default: 0)'
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/payment.SuccessResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/payment.InvoiceResponse'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/payment.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/payment.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get company invoices
+      tags:
+      - payments
+    post:
+      consumes:
+      - application/json
+      description: Generate a new invoice with Indonesian PPN 11% tax calculation
+        for manual bank transfer payment
+      parameters:
+      - description: Invoice generation data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/payment.InvoiceRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/payment.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/payment.InvoiceResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/payment.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/payment.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/payment.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Generate invoice for manual bank transfer
+      tags:
+      - payments
+  /api/v1/payments/invoices/{id}/confirm:
+    post:
+      consumes:
+      - application/json
+      description: Confirm payment for an invoice via manual bank transfer with Indonesian
+        banking system
+      parameters:
+      - description: Payment confirmation data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/payment.PaymentConfirmationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/payment.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/payment.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/payment.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/payment.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Confirm manual bank transfer payment
+      tags:
+      - payments
+  /api/v1/payments/invoices/{id}/instructions:
+    get:
+      description: Get detailed payment instructions for manual bank transfer with
+        Indonesian banking details
+      parameters:
+      - description: Invoice ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/payment.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/payment.PaymentInstructions'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/payment.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/payment.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/payment.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get payment instructions
+      tags:
+      - payments
+  /api/v1/payments/qris:
+    post:
+      consumes:
+      - application/json
+      description: Create QRIS payment - not supported, using manual bank transfer
+        instead
+      produces:
+      - application/json
+      responses:
+        "501":
+          description: Not Implemented
+          schema:
+            $ref: '#/definitions/payment.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create QRIS payment (Not Implemented)
+      tags:
+      - payments
+  /api/v1/payments/subscriptions:
+    get:
+      description: Get company subscriptions - not implemented yet
+      produces:
+      - application/json
+      responses:
+        "501":
+          description: Not Implemented
+          schema:
+            $ref: '#/definitions/payment.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get subscriptions (Not Implemented)
+      tags:
+      - payments
+    post:
+      consumes:
+      - application/json
+      description: Create new subscription - not implemented yet
+      produces:
+      - application/json
+      responses:
+        "501":
+          description: Not Implemented
+          schema:
+            $ref: '#/definitions/payment.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create subscription (Not Implemented)
+      tags:
+      - payments
+  /api/v1/payments/subscriptions/billing:
+    post:
+      consumes:
+      - application/json
+      description: Generate automatic billing for company subscription with Indonesian
+        PPN 11% tax calculation
+      parameters:
+      - description: Subscription billing data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/payment.SubscriptionBillingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/payment.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/payment.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/payment.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/payment.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Generate subscription billing
+      tags:
+      - payments
+  /api/v1/tracking/analytics/drivers:
+    get:
+      description: Get driver performance analytics and scoring
+      parameters:
+      - description: Driver ID
+        in: query
+        name: driver_id
+        type: string
+      - description: Period (daily, weekly, monthly)
+        in: query
+        name: period
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tracking.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get driver performance analytics
+      tags:
+      - tracking
+  /api/v1/tracking/analytics/fuel:
+    get:
+      description: Get fuel consumption analytics and reports
+      parameters:
+      - description: Start date
+        in: query
+        name: start_date
+        type: string
+      - description: End date
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tracking.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get fuel consumption analytics
+      tags:
+      - tracking
+  /api/v1/tracking/dashboard/stats:
+    get:
+      description: Get dashboard statistics for tracking
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tracking.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get dashboard statistics
+      tags:
+      - tracking
+  /api/v1/tracking/events:
+    get:
+      description: Get driver behavior events with filtering
+      parameters:
+      - description: Driver ID
+        in: query
+        name: driver_id
+        type: string
+      - description: Vehicle ID
+        in: query
+        name: vehicle_id
+        type: string
+      - description: Event type
+        in: query
+        name: event_type
+        type: string
+      - description: Severity level
+        in: query
+        name: severity
+        type: string
+      - description: Start time (RFC3339)
+        in: query
+        name: start_time
+        type: string
+      - description: End time (RFC3339)
+        in: query
+        name: end_time
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tracking.PaginatedResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get driver events
+      tags:
+      - tracking
+    post:
+      consumes:
+      - application/json
+      description: Submit a driver behavior event (speed violation, harsh braking,
+        etc.)
+      parameters:
+      - description: Driver event data
+        in: body
+        name: event
+        required: true
+        schema:
+          $ref: '#/definitions/tracking.DriverEventRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tracking.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Submit driver event
+      tags:
+      - tracking
+  /api/v1/tracking/geofences:
+    get:
+      description: Get list of geofences for the company
+      parameters:
+      - description: Geofence type
+        in: query
+        name: type
+        type: string
+      - description: Active status
+        in: query
+        name: is_active
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tracking.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get geofences
+      tags:
+      - tracking
+    post:
+      consumes:
+      - application/json
+      description: Create a new geofence for monitoring
+      parameters:
+      - description: Geofence data
+        in: body
+        name: geofence
+        required: true
+        schema:
+          $ref: '#/definitions/tracking.GeofenceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tracking.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create geofence
+      tags:
+      - tracking
+  /api/v1/tracking/geofences/{id}:
+    delete:
+      description: Delete a geofence
+      parameters:
+      - description: Geofence ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tracking.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete geofence
+      tags:
+      - tracking
+    put:
+      consumes:
+      - application/json
+      description: Update an existing geofence
+      parameters:
+      - description: Geofence ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Geofence update data
+        in: body
+        name: geofence
+        required: true
+        schema:
+          $ref: '#/definitions/tracking.GeofenceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tracking.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update geofence
+      tags:
+      - tracking
+  /api/v1/tracking/gps:
+    post:
+      consumes:
+      - application/json
+      description: Submit GPS data from mobile device for real-time tracking
+      parameters:
+      - description: GPS data
+        in: body
+        name: gps
+        required: true
+        schema:
+          $ref: '#/definitions/tracking.GPSDataRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tracking.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Submit GPS data
+      tags:
+      - tracking
+  /api/v1/tracking/reports/compliance:
+    get:
+      description: Get regulatory compliance report for tracking
+      parameters:
+      - description: Report period
+        in: query
+        name: period
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tracking.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get compliance report
+      tags:
+      - tracking
+  /api/v1/tracking/reports/generate:
+    post:
+      description: Generate comprehensive tracking report
+      parameters:
+      - description: Report type
+        in: query
+        name: type
+        type: string
+      - description: Report format (json, csv, pdf)
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tracking.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Generate tracking report
+      tags:
+      - tracking
+  /api/v1/tracking/trips:
+    get:
+      description: Get trip history for vehicles with filtering
+      parameters:
+      - description: Driver ID
+        in: query
+        name: driver_id
+        type: string
+      - description: Vehicle ID
+        in: query
+        name: vehicle_id
+        type: string
+      - description: Trip status
+        in: query
+        name: status
+        type: string
+      - description: Start time (RFC3339)
+        in: query
+        name: start_time
+        type: string
+      - description: End time (RFC3339)
+        in: query
+        name: end_time
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tracking.PaginatedResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get trip history
+      tags:
+      - tracking
+    post:
+      consumes:
+      - application/json
+      description: Start a new trip for a vehicle and driver
+      parameters:
+      - description: Trip data
+        in: body
+        name: trip
+        required: true
+        schema:
+          $ref: '#/definitions/tracking.TripRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tracking.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Start a trip
+      tags:
+      - tracking
+  /api/v1/tracking/vehicles/{id}/current:
+    get:
+      description: Get the current location of a vehicle
+      parameters:
+      - description: Vehicle ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tracking.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get current vehicle location
+      tags:
+      - tracking
+  /api/v1/tracking/vehicles/{id}/history:
+    get:
+      description: Get historical GPS data for a vehicle with filtering and pagination
+      parameters:
+      - description: Vehicle ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Driver ID
+        in: query
+        name: driver_id
+        type: string
+      - description: Start time (RFC3339)
+        in: query
+        name: start_time
+        type: string
+      - description: End time (RFC3339)
+        in: query
+        name: end_time
+        type: string
+      - description: Minimum GPS accuracy
+        in: query
+        name: min_accuracy
+        type: number
+      - description: Maximum speed
+        in: query
+        name: max_speed
+        type: number
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 100
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - default: timestamp
+        description: Sort field
+        in: query
+        name: sort_by
+        type: string
+      - default: desc
+        description: Sort order
+        in: query
+        name: sort_order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tracking.PaginatedResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get vehicle location history
+      tags:
+      - tracking
+  /api/v1/tracking/vehicles/{id}/route:
+    get:
+      description: Get route information for a vehicle including distance and duration
+      parameters:
+      - description: Vehicle ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Start time (RFC3339)
+        in: query
+        name: start_time
+        type: string
+      - description: End time (RFC3339)
+        in: query
+        name: end_time
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tracking.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get vehicle route data
+      tags:
+      - tracking
+  /api/v1/tracking/ws/{vehicle_id}:
+    get:
+      description: WebSocket endpoint for real-time GPS tracking updates
+      parameters:
+      - description: Vehicle ID
+        in: path
+        name: vehicle_id
+        required: true
+        type: string
+      responses:
+        "101":
+          description: Switching Protocols
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/tracking.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: WebSocket connection for real-time tracking
+      tags:
+      - tracking
+  /api/v1/vehicles:
+    get:
+      description: List vehicles with filters and pagination
+      parameters:
+      - description: Vehicle status
+        in: query
+        name: status
+        type: string
+      - description: Vehicle make
+        in: query
+        name: make
+        type: string
+      - description: Vehicle model
+        in: query
+        name: model
+        type: string
+      - description: Vehicle year
+        in: query
+        name: year
+        type: integer
+      - description: Fuel type
+        in: query
+        name: fuel_type
+        type: string
+      - description: Has driver assigned
+        in: query
+        name: has_driver
+        type: boolean
+      - description: GPS enabled
+        in: query
+        name: gps_enabled
+        type: boolean
+      - description: Search term
+        in: query
+        name: search
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - default: created_at
+        description: Sort field
+        in: query
+        name: sort_by
+        type: string
+      - default: desc
+        description: Sort order
+        in: query
+        name: sort_order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicle.PaginatedResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List vehicles
+      tags:
+      - vehicles
+    post:
+      consumes:
+      - application/json
+      description: Create a new vehicle with Indonesian compliance validation
+      parameters:
+      - description: Vehicle data
+        in: body
+        name: vehicle
+        required: true
+        schema:
+          $ref: '#/definitions/vehicle.CreateVehicleRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/vehicle.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a new vehicle
+      tags:
+      - vehicles
+  /api/v1/vehicles/{id}:
+    delete:
+      description: Delete vehicle (soft delete)
+      parameters:
+      - description: Vehicle ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicle.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete vehicle
+      tags:
+      - vehicles
+    get:
+      description: Get vehicle details by ID
+      parameters:
+      - description: Vehicle ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicle.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get vehicle by ID
+      tags:
+      - vehicles
+    put:
+      consumes:
+      - application/json
+      description: Update vehicle information
+      parameters:
+      - description: Vehicle ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Vehicle update data
+        in: body
+        name: vehicle
+        required: true
+        schema:
+          $ref: '#/definitions/vehicle.UpdateVehicleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicle.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update vehicle
+      tags:
+      - vehicles
+  /api/v1/vehicles/{id}/assign-driver:
+    post:
+      consumes:
+      - application/json
+      description: Assign a driver to a vehicle
+      parameters:
+      - description: Vehicle ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Driver assignment data
+        in: body
+        name: assignment
+        required: true
+        schema:
+          properties:
+            driver_id:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicle.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Assign driver to vehicle
+      tags:
+      - vehicles
+  /api/v1/vehicles/{id}/driver:
+    delete:
+      description: Remove driver assignment from vehicle
+      parameters:
+      - description: Vehicle ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicle.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Unassign driver from vehicle
+      tags:
+      - vehicles
+    get:
+      description: Get the driver assigned to a vehicle
+      parameters:
+      - description: Vehicle ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicle.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get vehicle driver
+      tags:
+      - vehicles
+  /api/v1/vehicles/{id}/inspection:
+    put:
+      consumes:
+      - application/json
+      description: Update vehicle inspection date and calculate next inspection
+      parameters:
+      - description: Vehicle ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Inspection date data
+        in: body
+        name: inspection
+        required: true
+        schema:
+          properties:
+            inspection_date:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicle.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update vehicle inspection date
+      tags:
+      - vehicles
+  /api/v1/vehicles/{id}/status:
+    put:
+      consumes:
+      - application/json
+      description: Update vehicle status (active, maintenance, retired, inactive)
+      parameters:
+      - description: Vehicle ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Status update data
+        in: body
+        name: status
+        required: true
+        schema:
+          properties:
+            reason:
+              type: string
+            status:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicle.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/vehicle.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update vehicle status
+      tags:
+      - vehicles
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
+tags:
+- description: Authentication endpoints
+  name: auth
+- description: Vehicle management endpoints
+  name: vehicles
+- description: Driver management endpoints
+  name: drivers
+- description: GPS tracking endpoints
+  name: tracking
+- description: Payment integration endpoints
+  name: payments
+- description: Analytics and reporting endpoints
+  name: analytics

@@ -175,13 +175,14 @@ CREATE TABLE IF NOT EXISTS driver_events (
     speed_at_event DECIMAL(5,2),
     timestamp TIMESTAMPTZ NOT NULL,
     metadata JSONB, -- Additional event-specific data
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    
-    INDEX (driver_id, timestamp),
-    INDEX (event_type, timestamp),
-    INDEX (company_id, timestamp),
-    INDEX (severity, timestamp)
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Create indexes for driver_events table
+CREATE INDEX IF NOT EXISTS idx_driver_events_driver_timestamp ON driver_events(driver_id, timestamp);
+CREATE INDEX IF NOT EXISTS idx_driver_events_type_timestamp ON driver_events(event_type, timestamp);
+CREATE INDEX IF NOT EXISTS idx_driver_events_company_timestamp ON driver_events(company_id, timestamp);
+CREATE INDEX IF NOT EXISTS idx_driver_events_severity_timestamp ON driver_events(severity, timestamp);
 
 -- Subscriptions table for Indonesian payment integration
 CREATE TABLE IF NOT EXISTS subscriptions (
