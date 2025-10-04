@@ -16,6 +16,7 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/gorm"
 
+	"github.com/tobangado69/fleettracker-pro/backend/internal/analytics"
 	"github.com/tobangado69/fleettracker-pro/backend/internal/auth"
 	"github.com/tobangado69/fleettracker-pro/backend/internal/common/config"
 	"github.com/tobangado69/fleettracker-pro/backend/internal/common/database"
@@ -142,6 +143,7 @@ func main() {
 	vehicleHistoryService := vehicle.NewVehicleHistoryService(db, repoManager)
 	driverService := driver.NewService(db)
 	paymentService := payment.NewService(db, cfg, repoManager)
+	analyticsService := analytics.NewService(db, redisClient, repoManager)
 
 	// Initialize handlers
 	authHandler := auth.NewHandler(authService)
@@ -150,9 +152,10 @@ func main() {
 	vehicleHistoryHandler := vehicle.NewVehicleHistoryHandler(vehicleHistoryService)
 	driverHandler := driver.NewHandler(driverService)
 	paymentHandler := payment.NewHandler(paymentService)
+	analyticsHandler := analytics.NewHandler(analyticsService)
 
 	// Setup routes
-	setupRoutes(r, authHandler, trackingHandler, vehicleHandler, vehicleHistoryHandler, driverHandler, paymentHandler, cfg, db, repoManager)
+	setupRoutes(r, authHandler, trackingHandler, vehicleHandler, vehicleHistoryHandler, driverHandler, paymentHandler, analyticsHandler, cfg, db, repoManager)
 
 	// Setup WebSocket for real-time tracking
 	setupWebSocket(r, trackingService)
@@ -208,6 +211,7 @@ func setupRoutes(
 	vehicleHistoryHandler *vehicle.VehicleHistoryHandler,
 	driverHandler *driver.Handler,
 	paymentHandler *payment.Handler,
+	analyticsHandler *analytics.Handler,
 	cfg *config.Config,
 	db *gorm.DB,
 	repoManager *repository.RepositoryManager,
@@ -348,11 +352,31 @@ func setupRoutes(
 			// Analytics and reporting
 			analytics := protected.Group("/analytics")
 			{
-				analytics.GET("/dashboard", trackingHandler.GetDashboardStats)
-				analytics.GET("/fuel-consumption", trackingHandler.GetFuelConsumption)
-				analytics.GET("/driver-performance", trackingHandler.GetDriverPerformance)
-				analytics.GET("/reports", trackingHandler.GenerateReport)
-				analytics.GET("/compliance", trackingHandler.GetComplianceReport)
+				// Dashboard
+				analytics.GET("/dashboard", analyticsHandler.GetDashboard)
+				analytics.GET("/dashboard/realtime", analyticsHandler.GetRealTimeDashboard)
+				
+				// Fuel Analytics
+				analytics.GET("/fuel/consumption", analyticsHandler.GetFuelConsumption)
+				analytics.GET("/fuel/efficiency", analyticsHandler.GetFuelEfficiency)
+				analytics.GET("/fuel/theft", analyticsHandler.GetFuelTheftAlerts)
+				analytics.GET("/fuel/optimization", analyticsHandler.GetFuelOptimization)
+				
+				// Driver Performance
+				analytics.GET("/drivers/performance", analyticsHandler.GetDriverPerformance)
+				analytics.GET("/drivers/ranking", analyticsHandler.GetDriverRanking)
+				analytics.GET("/drivers/behavior", analyticsHandler.GetDriverBehavior)
+				analytics.GET("/drivers/recommendations", analyticsHandler.GetDriverRecommendations)
+				
+				// Fleet Operations
+				analytics.GET("/fleet/utilization", analyticsHandler.GetFleetUtilization)
+				analytics.GET("/fleet/costs", analyticsHandler.GetFleetCosts)
+				analytics.GET("/fleet/maintenance", analyticsHandler.GetMaintenanceInsights)
+				
+				// Reports
+				analytics.POST("/reports/generate", analyticsHandler.GenerateReport)
+				analytics.GET("/reports/compliance", analyticsHandler.GetComplianceReport)
+				analytics.GET("/reports/export/:id", analyticsHandler.ExportReport)
 			}
 
 			// Repository health check (admin only)
