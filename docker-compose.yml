@@ -1,0 +1,137 @@
+version: '3.8'
+
+services:
+  # PostgreSQL with PostGIS for main application data
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: fleettracker-postgres
+    environment:
+      POSTGRES_DB: fleettracker
+      POSTGRES_USER: fleettracker
+      POSTGRES_PASSWORD: password123
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - fleettracker-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fleettracker -d fleettracker"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # TimescaleDB for GPS tracking time-series data
+  timescaledb:
+    image: timescale/timescaledb-ha:pg15-latest
+    container_name: fleettracker-timescaledb
+    environment:
+      POSTGRES_DB: fleettracker_timeseries
+      POSTGRES_USER: fleettracker
+      POSTGRES_PASSWORD: password123
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5433:5432"
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+      - ./init-timescale.sql:/docker-entrypoint-initdb.d/init-timescale.sql
+    networks:
+      - fleettracker-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fleettracker -d fleettracker_timeseries"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and session management
+  redis:
+    image: redis:7-alpine
+    container_name: fleettracker-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - fleettracker-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+
+  # Backend API (for development)
+  backend:
+    build: .
+    container_name: fleettracker-backend
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://fleettracker:password123@postgres:5432/fleettracker?sslmode=disable
+      TIMESERIES_URL: postgres://fleettracker:password123@timescaledb:5432/fleettracker_timeseries?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: your-super-secret-jwt-key-for-development
+      PORT: 8080
+      ENVIRONMENT: development
+      DEBUG: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - fleettracker-network
+    volumes:
+      - .:/app
+      - /app/vendor
+    working_dir: /app
+    command: go run cmd/server/main.go
+
+  # pgAdmin for database management (optional)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: fleettracker-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@fleettracker.id
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - fleettracker-network
+    depends_on:
+      - postgres
+      - timescaledb
+
+  # Redis Commander for Redis management (optional)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: fleettracker-redis-commander
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+    networks:
+      - fleettracker-network
+    depends_on:
+      - redis
+
+volumes:
+  postgres_data:
+    driver: local
+  timescale_data:
+    driver: local
+  redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  fleettracker-network:
+    driver: bridge
