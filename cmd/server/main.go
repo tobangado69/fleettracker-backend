@@ -240,12 +240,21 @@ func setupRoutes(
 			// Driver management
 			drivers := protected.Group("/drivers")
 			{
-				drivers.GET("", driverHandler.GetDrivers)
-				drivers.POST("", driverHandler.CreateDriver)
-				drivers.GET("/:id", driverHandler.GetDriver)
-				drivers.PUT("/:id", driverHandler.UpdateDriver)
-				drivers.DELETE("/:id", driverHandler.DeleteDriver)
-				drivers.GET("/:id/performance", driverHandler.GetDriverPerformance)
+				drivers.GET("", driverHandler.ListDrivers)              // List drivers with filters
+				drivers.POST("", driverHandler.CreateDriver)            // Create driver
+				drivers.GET("/:id", driverHandler.GetDriver)            // Get driver details
+				drivers.PUT("/:id", driverHandler.UpdateDriver)         // Update driver
+				drivers.DELETE("/:id", driverHandler.DeleteDriver)      // Delete driver
+				drivers.PUT("/:id/status", driverHandler.UpdateDriverStatus)     // Update driver status
+				drivers.GET("/:id/performance", driverHandler.GetDriverPerformance) // Get performance data
+				drivers.PUT("/:id/performance", driverHandler.UpdateDriverPerformance) // Update performance scores
+				drivers.POST("/:id/assign-vehicle", driverHandler.AssignVehicle)    // Assign vehicle
+				drivers.DELETE("/:id/vehicle", driverHandler.UnassignVehicle)       // Unassign vehicle
+				drivers.GET("/:id/vehicle", driverHandler.GetDriverVehicle)        // Get assigned vehicle
+				drivers.PUT("/:id/medical", driverHandler.UpdateMedicalCheckup)     // Update medical checkup
+				drivers.PUT("/:id/training", driverHandler.UpdateTrainingStatus)    // Update training status
+				
+				// Legacy endpoints for backward compatibility
 				drivers.GET("/:id/trips", driverHandler.GetDriverTrips)
 			}
 
