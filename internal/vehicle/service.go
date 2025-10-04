@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	apperrors "github.com/tobangado69/fleettracker-pro/backend/pkg/errors"
 	"github.com/tobangado69/fleettracker-pro/backend/pkg/models"
 	"gorm.io/gorm"
 )
@@ -138,17 +139,17 @@ func (s *Service) CreateVehicle(companyID string, req CreateVehicleRequest) (*mo
 	// Check if license plate already exists
 	var existingVehicle models.Vehicle
 	if err := s.db.Where("license_plate = ?", req.LicensePlate).First(&existingVehicle).Error; err == nil {
-		return nil, errors.New("vehicle with this license plate already exists")
+		return nil, apperrors.NewConflictError("Vehicle with this license plate already exists")
 	}
 
 	// Check if VIN already exists
 	if err := s.db.Where("vin = ?", req.VIN).First(&existingVehicle).Error; err == nil {
-		return nil, errors.New("vehicle with this VIN already exists")
+		return nil, apperrors.NewConflictError("Vehicle with this VIN already exists")
 	}
 
 	// Check if STNK number already exists
 	if err := s.db.Where("stnk = ?", req.STNKNumber).First(&existingVehicle).Error; err == nil {
-		return nil, errors.New("vehicle with this STNK number already exists")
+		return nil, apperrors.NewConflictError("Vehicle with this STNK number already exists")
 	}
 
 	// Validate driver assignment if provided
@@ -187,7 +188,7 @@ func (s *Service) CreateVehicle(companyID string, req CreateVehicleRequest) (*mo
 
 	// Save to database
 	if err := s.db.Create(vehicle).Error; err != nil {
-		return nil, fmt.Errorf("failed to create vehicle: %w", err)
+		return nil, apperrors.NewInternalError("Failed to create vehicle").WithInternal(err)
 	}
 
 	return vehicle, nil
@@ -198,10 +199,10 @@ func (s *Service) GetVehicle(companyID, vehicleID string) (*models.Vehicle, erro
 	var vehicle models.Vehicle
 	
 	if err := s.db.Preload("Driver").Where("company_id = ? AND id = ?", companyID, vehicleID).First(&vehicle).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("vehicle not found")
+		if err == gorm.ErrRecordNotFound {
+			return nil, apperrors.NewNotFoundError("Vehicle")
 		}
-		return nil, fmt.Errorf("failed to get vehicle: %w", err)
+		return nil, apperrors.NewInternalError("Failed to fetch vehicle").WithInternal(err)
 	}
 
 	return &vehicle, nil
@@ -240,7 +241,7 @@ func (s *Service) UpdateVehicle(companyID, vehicleID string, req UpdateVehicleRe
 	if req.LicensePlate != nil && *req.LicensePlate != vehicle.LicensePlate {
 		var existingVehicle models.Vehicle
 		if err := s.db.Where("license_plate = ? AND id != ?", *req.LicensePlate, vehicleID).First(&existingVehicle).Error; err == nil {
-			return nil, errors.New("vehicle with this license plate already exists")
+			return nil, apperrors.NewConflictError("Vehicle with this license plate already exists")
 		}
 	}
 
@@ -248,7 +249,7 @@ func (s *Service) UpdateVehicle(companyID, vehicleID string, req UpdateVehicleRe
 	if req.VIN != nil && *req.VIN != vehicle.VIN {
 		var existingVehicle models.Vehicle
 		if err := s.db.Where("vin = ? AND id != ?", *req.VIN, vehicleID).First(&existingVehicle).Error; err == nil {
-			return nil, errors.New("vehicle with this VIN already exists")
+			return nil, apperrors.NewConflictError("Vehicle with this VIN already exists")
 		}
 	}
 
@@ -256,7 +257,7 @@ func (s *Service) UpdateVehicle(companyID, vehicleID string, req UpdateVehicleRe
 	if req.STNKNumber != nil && *req.STNKNumber != vehicle.STNK {
 		var existingVehicle models.Vehicle
 		if err := s.db.Where("stnk = ? AND id != ?", *req.STNKNumber, vehicleID).First(&existingVehicle).Error; err == nil {
-			return nil, errors.New("vehicle with this STNK number already exists")
+			return nil, apperrors.NewConflictError("Vehicle with this STNK number already exists")
 		}
 	}
 
@@ -326,7 +327,7 @@ func (s *Service) UpdateVehicle(companyID, vehicleID string, req UpdateVehicleRe
 
 	// Save changes
 	if err := s.db.Save(vehicle).Error; err != nil {
-		return nil, fmt.Errorf("failed to update vehicle: %w", err)
+		return nil, apperrors.NewInternalError("Failed to update vehicle").WithInternal(err)
 	}
 
 	return vehicle, nil
@@ -342,12 +343,12 @@ func (s *Service) DeleteVehicle(companyID, vehicleID string) error {
 
 	// Check if vehicle is assigned to a driver
 	if vehicle.DriverID != nil {
-		return errors.New("cannot delete vehicle that is assigned to a driver")
+		return apperrors.NewBadRequestError("Cannot delete vehicle that is assigned to a driver")
 	}
 
 	// Soft delete
 	if err := s.db.Delete(vehicle).Error; err != nil {
-		return fmt.Errorf("failed to delete vehicle: %w", err)
+		return apperrors.NewInternalError("Failed to delete vehicle").WithInternal(err)
 	}
 
 	return nil
@@ -394,7 +395,7 @@ func (s *Service) ListVehicles(companyID string, filters VehicleFilters) ([]mode
 
 	// Get total count
 	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, fmt.Errorf("failed to count vehicles: %w", err)
+		return nil, 0, apperrors.NewInternalError("Failed to count vehicles").WithInternal(err)
 	}
 
 	// Apply sorting
@@ -422,7 +423,7 @@ func (s *Service) ListVehicles(companyID string, filters VehicleFilters) ([]mode
 
 	// Execute query with preload
 	if err := query.Preload("Driver").Find(&vehicles).Error; err != nil {
-		return nil, 0, fmt.Errorf("failed to list vehicles: %w", err)
+		return nil, 0, apperrors.NewInternalError("Failed to list vehicles").WithInternal(err)
 	}
 
 	return vehicles, total, nil
@@ -438,7 +439,7 @@ func (s *Service) UpdateVehicleStatus(companyID, vehicleID string, status Vehicl
 	vehicle.Status = string(status)
 	
 	if err := s.db.Save(vehicle).Error; err != nil {
-		return fmt.Errorf("failed to update vehicle status: %w", err)
+		return apperrors.NewInternalError("Failed to update vehicle status").WithInternal(err)
 	}
 
 	// TODO: Add status change history tracking
@@ -457,12 +458,12 @@ func (s *Service) AssignDriver(companyID, vehicleID, driverID string) error {
 	// Check if driver is already assigned to another vehicle
 	var existingVehicle models.Vehicle
 	if err := s.db.Where("company_id = ? AND driver_id = ?", companyID, driverID).First(&existingVehicle).Error; err == nil {
-		return errors.New("driver is already assigned to another vehicle")
+		return apperrors.NewConflictError("Driver is already assigned to another vehicle")
 	}
 
 	// Update vehicle
 	if err := s.db.Model(&models.Vehicle{}).Where("company_id = ? AND id = ?", companyID, vehicleID).Update("driver_id", driverID).Error; err != nil {
-		return fmt.Errorf("failed to assign driver: %w", err)
+		return apperrors.NewInternalError("Failed to assign driver").WithInternal(err)
 	}
 
 	// TODO: Add assignment history tracking
@@ -475,7 +476,7 @@ func (s *Service) AssignDriver(companyID, vehicleID, driverID string) error {
 func (s *Service) UnassignDriver(companyID, vehicleID string) error {
 	// Update vehicle
 	if err := s.db.Model(&models.Vehicle{}).Where("company_id = ? AND id = ?", companyID, vehicleID).Update("driver_id", nil).Error; err != nil {
-		return fmt.Errorf("failed to unassign driver: %w", err)
+		return apperrors.NewInternalError("Failed to unassign driver").WithInternal(err)
 	}
 
 	// TODO: Add unassignment history tracking
@@ -492,9 +493,9 @@ func (s *Service) GetVehicleDriver(companyID, vehicleID string) (*models.Driver,
 		Where("vehicles.company_id = ? AND vehicles.id = ?", companyID, vehicleID).
 		First(&driver).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("no driver assigned to this vehicle")
+			return nil, apperrors.NewNotFoundError("Driver")
 		}
-		return nil, fmt.Errorf("failed to get vehicle driver: %w", err)
+		return nil, apperrors.NewInternalError("Failed to get vehicle driver").WithInternal(err)
 	}
 
 	return &driver, nil
@@ -513,7 +514,7 @@ func (s *Service) UpdateInspectionDate(companyID, vehicleID string, inspectionDa
 	vehicle.NextServiceDate = &nextInspection
 
 	if err := s.db.Save(vehicle).Error; err != nil {
-		return fmt.Errorf("failed to update inspection date: %w", err)
+		return apperrors.NewInternalError("Failed to update inspection date").WithInternal(err)
 	}
 
 	return nil
@@ -523,17 +524,17 @@ func (s *Service) UpdateInspectionDate(companyID, vehicleID string, inspectionDa
 func (s *Service) validateIndonesianCompliance(stnkNumber, bpkbNumber, licensePlate string) error {
 	// Validate STNK number format
 	if err := s.validateSTNKNumber(stnkNumber); err != nil {
-		return fmt.Errorf("STNK validation failed: %w", err)
+		return apperrors.NewValidationError("STNK validation failed").WithInternal(err)
 	}
 
 	// Validate license plate format
 	if err := s.validateIndonesianLicensePlate(licensePlate); err != nil {
-		return fmt.Errorf("license plate validation failed: %w", err)
+		return apperrors.NewValidationError("License plate validation failed").WithInternal(err)
 	}
 
 	// BPKB number validation (basic format check)
 	if len(bpkbNumber) < 10 || len(bpkbNumber) > 20 {
-		return errors.New("BPKB number must be between 10 and 20 characters")
+		return apperrors.NewValidationError("BPKB number must be between 10 and 20 characters")
 	}
 
 	return nil
@@ -545,10 +546,10 @@ func (s *Service) validateSTNKNumber(stnkNumber string) error {
 	pattern := `^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$`
 	matched, err := regexp.MatchString(pattern, stnkNumber)
 	if err != nil {
-		return fmt.Errorf("failed to validate STNK number: %w", err)
+		return apperrors.NewValidationError("Failed to validate STNK number").WithInternal(err)
 	}
 	if !matched {
-		return errors.New("invalid STNK number format, expected format: XXXX-XXXX-XXXX-XXXX")
+		return apperrors.NewValidationError("Invalid STNK number format, expected format: XXXX-XXXX-XXXX-XXXX")
 	}
 	return nil
 }
@@ -559,10 +560,10 @@ func (s *Service) validateIndonesianLicensePlate(plate string) error {
 	pattern := `^[A-Z]{1,2}\s[0-9]{1,4}\s[A-Z]{1,3}$`
 	matched, err := regexp.MatchString(pattern, plate)
 	if err != nil {
-		return fmt.Errorf("failed to validate license plate: %w", err)
+		return apperrors.NewValidationError("Failed to validate license plate").WithInternal(err)
 	}
 	if !matched {
-		return errors.New("invalid Indonesian license plate format, expected format: B 1234 ABC")
+		return apperrors.NewValidationError("Invalid Indonesian license plate format, expected format: B 1234 ABC")
 	}
 	return nil
 }
@@ -573,14 +574,14 @@ func (s *Service) validateDriverAssignment(companyID, driverID string) error {
 	
 	if err := s.db.Where("company_id = ? AND id = ? AND is_active = ?", companyID, driverID, true).First(&driver).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("driver not found or inactive")
+			return apperrors.NewNotFoundError("Driver")
 		}
-		return fmt.Errorf("failed to validate driver: %w", err)
+		return apperrors.NewInternalError("Failed to validate driver").WithInternal(err)
 	}
 
 	// Check if driver can drive (includes license validation)
 	if !driver.CanDrive() {
-		return errors.New("driver license is expired or invalid, or driver is not available")
+		return apperrors.NewValidationError("Driver license is expired or invalid, or driver is not available")
 	}
 
 	return nil

@@ -3,11 +3,11 @@ package vehicle
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/tobangado69/fleettracker-pro/backend/internal/common/repository"
+	apperrors "github.com/tobangado69/fleettracker-pro/backend/pkg/errors"
 	"github.com/tobangado69/fleettracker-pro/backend/pkg/models"
 	"gorm.io/gorm"
 )
@@ -98,20 +98,20 @@ func (s *VehicleHistoryService) AddVehicleHistory(ctx context.Context, companyID
 	vehicleRepo := s.repoManager.GetVehicles()
 	vehicle, err := vehicleRepo.GetByID(ctx, vehicleID)
 	if err != nil {
-		return nil, fmt.Errorf("vehicle not found: %w", err)
+		return nil, apperrors.NewNotFoundError("Vehicle").WithInternal(err)
 	}
 	
 	if vehicle.CompanyID != companyID {
-		return nil, errors.New("vehicle does not belong to company")
+		return nil, apperrors.NewForbiddenError("Vehicle does not belong to this company")
 	}
 	
 	// Validate event type and category
 	if !models.ValidateEventType(req.EventType) {
-		return nil, errors.New("invalid event type")
+		return nil, apperrors.NewValidationError("Invalid event type")
 	}
 	
 	if !models.ValidateEventCategory(req.EventCategory) {
-		return nil, errors.New("invalid event category")
+		return nil, apperrors.NewValidationError("Invalid event category")
 	}
 	
 	// Set default currency to IDR if not provided
@@ -124,7 +124,7 @@ func (s *VehicleHistoryService) AddVehicleHistory(ctx context.Context, companyID
 	if req.Documents != nil && len(req.Documents) > 0 {
 		documentsJSON, err = json.Marshal(req.Documents)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal documents: %w", err)
+			return nil, apperrors.NewInternalError("Failed to marshal documents").WithInternal(err)
 		}
 	}
 	
@@ -150,7 +150,7 @@ func (s *VehicleHistoryService) AddVehicleHistory(ctx context.Context, companyID
 	// Save to database
 	historyRepo := s.repoManager.GetVehicleHistories()
 	if err := historyRepo.Create(ctx, history); err != nil {
-		return nil, fmt.Errorf("failed to create vehicle history: %w", err)
+		return nil, apperrors.NewInternalError("Failed to create vehicle history").WithInternal(err)
 	}
 	
 	// Update vehicle odometer if mileage is provided
@@ -171,11 +171,11 @@ func (s *VehicleHistoryService) GetVehicleHistory(ctx context.Context, companyID
 	vehicleRepo := s.repoManager.GetVehicles()
 	vehicle, err := vehicleRepo.GetByID(ctx, vehicleID)
 	if err != nil {
-		return nil, fmt.Errorf("vehicle not found: %w", err)
+		return nil, apperrors.NewNotFoundError("Vehicle").WithInternal(err)
 	}
 	
 	if vehicle.CompanyID != companyID {
-		return nil, errors.New("vehicle does not belong to company")
+		return nil, apperrors.NewForbiddenError("Vehicle does not belong to this company")
 	}
 	
 	// Set default pagination
@@ -219,7 +219,7 @@ func (s *VehicleHistoryService) GetVehicleHistory(ctx context.Context, companyID
 	}
 	
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve vehicle history: %w", err)
+		return nil, apperrors.NewInternalError("Failed to retrieve vehicle history").WithInternal(err)
 	}
 	
 	// Convert to response format
@@ -237,17 +237,17 @@ func (s *VehicleHistoryService) GetMaintenanceHistory(ctx context.Context, compa
 	vehicleRepo := s.repoManager.GetVehicles()
 	vehicle, err := vehicleRepo.GetByID(ctx, vehicleID)
 	if err != nil {
-		return nil, fmt.Errorf("vehicle not found: %w", err)
+		return nil, apperrors.NewNotFoundError("Vehicle").WithInternal(err)
 	}
 	
 	if vehicle.CompanyID != companyID {
-		return nil, errors.New("vehicle does not belong to company")
+		return nil, apperrors.NewForbiddenError("Vehicle does not belong to this company")
 	}
 	
 	historyRepo := s.repoManager.GetVehicleHistories()
 	histories, err := historyRepo.GetMaintenanceHistory(ctx, vehicleID, pagination)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve maintenance history: %w", err)
+		return nil, apperrors.NewInternalError("Failed to retrieve maintenance history").WithInternal(err)
 	}
 	
 	var responses []*VehicleHistoryResponse
@@ -267,7 +267,7 @@ func (s *VehicleHistoryService) GetUpcomingMaintenance(ctx context.Context, comp
 	historyRepo := s.repoManager.GetVehicleHistories()
 	histories, err := historyRepo.GetUpcomingMaintenance(ctx, companyID, days)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve upcoming maintenance: %w", err)
+		return nil, apperrors.NewInternalError("Failed to retrieve upcoming maintenance").WithInternal(err)
 	}
 	
 	var responses []*VehicleHistoryResponse
@@ -283,7 +283,7 @@ func (s *VehicleHistoryService) GetOverdueMaintenance(ctx context.Context, compa
 	historyRepo := s.repoManager.GetVehicleHistories()
 	histories, err := historyRepo.GetOverdueMaintenance(ctx, companyID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve overdue maintenance: %w", err)
+		return nil, apperrors.NewInternalError("Failed to retrieve overdue maintenance").WithInternal(err)
 	}
 	
 	var responses []*VehicleHistoryResponse
@@ -300,16 +300,16 @@ func (s *VehicleHistoryService) UpdateMaintenanceSchedule(ctx context.Context, c
 	historyRepo := s.repoManager.GetVehicleHistories()
 	history, err := historyRepo.GetByID(ctx, historyID)
 	if err != nil {
-		return fmt.Errorf("history entry not found: %w", err)
+		return apperrors.NewNotFoundError("History entry").WithInternal(err)
 	}
 	
 	if history.CompanyID != companyID {
-		return errors.New("history entry does not belong to company")
+		return apperrors.NewForbiddenError("History entry does not belong to this company")
 	}
 	
 	// Update maintenance schedule
 	if err := historyRepo.UpdateMaintenanceSchedule(ctx, historyID, *req.NextServiceDue); err != nil {
-		return fmt.Errorf("failed to update maintenance schedule: %w", err)
+		return apperrors.NewInternalError("Failed to update maintenance schedule").WithInternal(err)
 	}
 	
 	return nil
@@ -321,11 +321,11 @@ func (s *VehicleHistoryService) GetCostSummary(ctx context.Context, companyID, v
 	vehicleRepo := s.repoManager.GetVehicles()
 	vehicle, err := vehicleRepo.GetByID(ctx, vehicleID)
 	if err != nil {
-		return nil, fmt.Errorf("vehicle not found: %w", err)
+		return nil, apperrors.NewNotFoundError("Vehicle").WithInternal(err)
 	}
 	
 	if vehicle.CompanyID != companyID {
-		return nil, errors.New("vehicle does not belong to company")
+		return nil, apperrors.NewForbiddenError("Vehicle does not belong to this company")
 	}
 	
 	historyRepo := s.repoManager.GetVehicleHistories()
@@ -338,11 +338,11 @@ func (s *VehicleHistoryService) GetMaintenanceTrends(ctx context.Context, compan
 	vehicleRepo := s.repoManager.GetVehicles()
 	vehicle, err := vehicleRepo.GetByID(ctx, vehicleID)
 	if err != nil {
-		return nil, fmt.Errorf("vehicle not found: %w", err)
+		return nil, apperrors.NewNotFoundError("Vehicle").WithInternal(err)
 	}
 	
 	if vehicle.CompanyID != companyID {
-		return nil, errors.New("vehicle does not belong to company")
+		return nil, apperrors.NewForbiddenError("Vehicle does not belong to this company")
 	}
 	
 	if months <= 0 {
@@ -397,11 +397,11 @@ func (s *VehicleHistoryService) GetVehicleHistoryByID(ctx context.Context, compa
 	historyRepo := s.repoManager.GetVehicleHistories()
 	history, err := historyRepo.GetByID(ctx, historyID)
 	if err != nil {
-		return nil, fmt.Errorf("history entry not found: %w", err)
+		return nil, apperrors.NewNotFoundError("History entry").WithInternal(err)
 	}
 	
 	if history.CompanyID != companyID {
-		return nil, errors.New("history entry does not belong to company")
+		return nil, apperrors.NewForbiddenError("History entry does not belong to this company")
 	}
 	
 	return s.historyToResponse(history), nil
@@ -413,20 +413,20 @@ func (s *VehicleHistoryService) UpdateVehicleHistory(ctx context.Context, compan
 	historyRepo := s.repoManager.GetVehicleHistories()
 	history, err := historyRepo.GetByID(ctx, historyID)
 	if err != nil {
-		return nil, fmt.Errorf("history entry not found: %w", err)
+		return nil, apperrors.NewNotFoundError("History entry").WithInternal(err)
 	}
 	
 	if history.CompanyID != companyID {
-		return nil, errors.New("history entry does not belong to company")
+		return nil, apperrors.NewForbiddenError("History entry does not belong to this company")
 	}
 	
 	// Validate event type and category
 	if !models.ValidateEventType(req.EventType) {
-		return nil, errors.New("invalid event type")
+		return nil, apperrors.NewValidationError("Invalid event type")
 	}
 	
 	if !models.ValidateEventCategory(req.EventCategory) {
-		return nil, errors.New("invalid event category")
+		return nil, apperrors.NewValidationError("Invalid event category")
 	}
 	
 	// Set default currency to IDR if not provided
@@ -439,7 +439,7 @@ func (s *VehicleHistoryService) UpdateVehicleHistory(ctx context.Context, compan
 	if req.Documents != nil && len(req.Documents) > 0 {
 		documentsJSON, err = json.Marshal(req.Documents)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal documents: %w", err)
+			return nil, apperrors.NewInternalError("Failed to marshal documents").WithInternal(err)
 		}
 	}
 	
@@ -458,7 +458,7 @@ func (s *VehicleHistoryService) UpdateVehicleHistory(ctx context.Context, compan
 	history.NextServiceDue = req.NextServiceDue
 	
 	if err := historyRepo.Update(ctx, history); err != nil {
-		return nil, fmt.Errorf("failed to update vehicle history: %w", err)
+		return nil, apperrors.NewInternalError("Failed to update vehicle history").WithInternal(err)
 	}
 	
 	return s.historyToResponse(history), nil
@@ -470,15 +470,15 @@ func (s *VehicleHistoryService) DeleteVehicleHistory(ctx context.Context, compan
 	historyRepo := s.repoManager.GetVehicleHistories()
 	history, err := historyRepo.GetByID(ctx, historyID)
 	if err != nil {
-		return fmt.Errorf("history entry not found: %w", err)
+		return apperrors.NewNotFoundError("History entry").WithInternal(err)
 	}
 	
 	if history.CompanyID != companyID {
-		return errors.New("history entry does not belong to company")
+		return apperrors.NewForbiddenError("History entry does not belong to this company")
 	}
 	
 	if err := historyRepo.Delete(ctx, historyID); err != nil {
-		return fmt.Errorf("failed to delete vehicle history: %w", err)
+		return apperrors.NewInternalError("Failed to delete vehicle history").WithInternal(err)
 	}
 	
 	return nil
