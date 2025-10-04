@@ -261,12 +261,35 @@ func setupRoutes(
 			// GPS tracking
 			tracking := protected.Group("/tracking")
 			{
-				tracking.POST("/gps", trackingHandler.ProcessGPSData)
-				tracking.GET("/vehicles/:id/current", trackingHandler.GetCurrentLocation)
-				tracking.GET("/vehicles/:id/history", trackingHandler.GetLocationHistory)
-				tracking.GET("/vehicles/:id/route", trackingHandler.GetRoute)
-				tracking.POST("/events", trackingHandler.ProcessDriverEvent)
-				tracking.GET("/events", trackingHandler.GetDriverEvents)
+				// GPS Data Management
+				tracking.POST("/gps", trackingHandler.ProcessGPSData)                    // Submit GPS data
+				tracking.GET("/vehicles/:id/current", trackingHandler.GetCurrentLocation) // Get current location
+				tracking.GET("/vehicles/:id/history", trackingHandler.GetLocationHistory) // Get location history
+				tracking.GET("/vehicles/:id/route", trackingHandler.GetRoute)            // Get route data
+				
+				// Driver Event Management
+				tracking.POST("/events", trackingHandler.ProcessDriverEvent)             // Submit driver event
+				tracking.GET("/events", trackingHandler.GetDriverEvents)                 // Get driver events
+				
+				// Trip Management
+				tracking.POST("/trips", trackingHandler.StartTrip)                       // Start/end trip
+				tracking.GET("/trips", trackingHandler.GetTrips)                         // Get trip history
+				
+				// Geofence Management
+				tracking.POST("/geofences", trackingHandler.CreateGeofence)              // Create geofence
+				tracking.GET("/geofences", trackingHandler.GetGeofences)                 // List geofences
+				tracking.PUT("/geofences/:id", trackingHandler.UpdateGeofence)           // Update geofence
+				tracking.DELETE("/geofences/:id", trackingHandler.DeleteGeofence)        // Delete geofence
+				
+				// WebSocket for real-time tracking
+				tracking.GET("/ws/:vehicle_id", trackingHandler.HandleWebSocket)         // WebSocket connection
+				
+				// Analytics and Reporting
+				tracking.GET("/dashboard/stats", trackingHandler.GetDashboardStats)     // Dashboard statistics
+				tracking.GET("/analytics/fuel", trackingHandler.GetFuelConsumption)      // Fuel analytics
+				tracking.GET("/analytics/drivers", trackingHandler.GetDriverPerformance) // Driver performance
+				tracking.POST("/reports/generate", trackingHandler.GenerateReport)       // Generate reports
+				tracking.GET("/reports/compliance", trackingHandler.GetComplianceReport) // Compliance report
 			}
 
 			// Payment integration
