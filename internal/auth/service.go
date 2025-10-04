@@ -10,6 +10,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"gorm.io/gorm"
 
+	"github.com/tobangado69/fleettracker-pro/backend/pkg/errors"
 	"github.com/tobangado69/fleettracker-pro/backend/pkg/models"
 )
 
@@ -83,18 +84,21 @@ func (s *Service) Register(req RegisterRequest) (*UserResponse, error) {
 	// Validate email uniqueness
 	var existingUser models.User
 	if err := s.db.Where("email = ?", req.Email).First(&existingUser).Error; err == nil {
-		return nil, fmt.Errorf("email already exists")
+		return nil, errors.NewConflictError("Email already registered")
 	}
 
 	// Validate username uniqueness
 	if err := s.db.Where("username = ?", req.Username).First(&existingUser).Error; err == nil {
-		return nil, fmt.Errorf("username already exists")
+		return nil, errors.NewConflictError("Username already taken")
 	}
 
 	// Validate company exists
 	var company models.Company
 	if err := s.db.Where("id = ? AND is_active = true", req.CompanyID).First(&company).Error; err != nil {
-		return nil, fmt.Errorf("company not found or inactive")
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.NewNotFoundError("Company")
+		}
+		return nil, errors.NewInternalError("Failed to validate company").WithInternal(err)
 	}
 
 	// Set default role if not provided
@@ -106,13 +110,13 @@ func (s *Service) Register(req RegisterRequest) (*UserResponse, error) {
 	// Validate role
 	validRoles := []string{"admin", "manager", "operator"}
 	if !contains(validRoles, role) {
-		return nil, fmt.Errorf("invalid role: %s", role)
+		return nil, errors.NewValidationError(fmt.Sprintf("Invalid role: %s", role))
 	}
 
 	// Generate email verification token
 	verificationToken, err := s.generateSecureToken()
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate verification token: %v", err)
+		return nil, errors.NewInternalError("Failed to generate verification token").WithInternal(err)
 	}
 
 	// Create user
@@ -135,7 +139,7 @@ func (s *Service) Register(req RegisterRequest) (*UserResponse, error) {
 
 	// Save user to database
 	if err := s.db.Create(&user).Error; err != nil {
-		return nil, fmt.Errorf("failed to create user: %v", err)
+		return nil, errors.NewInternalError("Failed to create user").WithInternal(err)
 	}
 
 	// TODO: Send verification email
@@ -149,12 +153,13 @@ func (s *Service) Login(req LoginRequest) (*UserResponse, *TokenResponse, error)
 	// Find user by email
 	var user models.User
 	if err := s.db.Where("email = ? AND is_active = true", req.Email).First(&user).Error; err != nil {
-		return nil, nil, fmt.Errorf("invalid credentials")
+		// Don't reveal whether email exists or not
+		return nil, nil, errors.NewUnauthorizedError("Invalid email or password")
 	}
 
 	// Check if account is locked
 	if user.IsAccountLocked() {
-		return nil, nil, fmt.Errorf("account is locked due to too many failed login attempts")
+		return nil, nil, errors.NewForbiddenError("Account is locked due to too many failed login attempts")
 	}
 
 	// Verify password
@@ -162,7 +167,7 @@ func (s *Service) Login(req LoginRequest) (*UserResponse, *TokenResponse, error)
 		// Increment failed attempts
 		user.IncrementFailedAttempts()
 		s.db.Save(&user)
-		return nil, nil, fmt.Errorf("invalid credentials")
+		return nil, nil, errors.NewUnauthorizedError("Invalid email or password")
 	}
 
 	// Reset failed attempts on successful login
@@ -173,12 +178,12 @@ func (s *Service) Login(req LoginRequest) (*UserResponse, *TokenResponse, error)
 	// Generate JWT tokens
 	tokenResponse, err := s.generateTokens(&user)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to generate tokens: %v", err)
+		return nil, nil, errors.NewInternalError("Failed to generate tokens").WithInternal(err)
 	}
 
 	// Create session
 	if err := s.createSession(&user, tokenResponse.AccessToken, tokenResponse.RefreshToken); err != nil {
-		return nil, nil, fmt.Errorf("failed to create session: %v", err)
+		return nil, nil, errors.NewInternalError("Failed to create session").WithInternal(err)
 	}
 
 	return s.userToResponse(&user), tokenResponse, nil
@@ -189,24 +194,27 @@ func (s *Service) RefreshToken(refreshToken string) (*TokenResponse, error) {
 	// Find session by refresh token
 	var session models.Session
 	if err := s.db.Where("refresh_token = ? AND is_active = true AND expires_at > ?", refreshToken, time.Now()).First(&session).Error; err != nil {
-		return nil, fmt.Errorf("invalid refresh token")
+		return nil, errors.NewUnauthorizedError("Invalid or expired refresh token")
 	}
 
 	// Get user
 	var user models.User
 	if err := s.db.Where("id = ?", session.UserID).First(&user).Error; err != nil {
-		return nil, fmt.Errorf("user not found")
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.NewNotFoundError("User")
+		}
+		return nil, errors.NewInternalError("Failed to fetch user").WithInternal(err)
 	}
 
 	// Check if user is still active
 	if !user.IsActive {
-		return nil, fmt.Errorf("user account is inactive")
+		return nil, errors.NewForbiddenError("User account is inactive")
 	}
 
 	// Generate new tokens
 	tokenResponse, err := s.generateTokens(&user)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate tokens: %v", err)
+		return nil, errors.NewInternalError("Failed to generate tokens").WithInternal(err)
 	}
 
 	// Update session with new tokens
@@ -222,7 +230,7 @@ func (s *Service) RefreshToken(refreshToken string) (*TokenResponse, error) {
 func (s *Service) Logout(accessToken string) error {
 	// Find and deactivate session
 	if err := s.db.Model(&models.Session{}).Where("token = ?", accessToken).Update("is_active", false).Error; err != nil {
-		return fmt.Errorf("failed to logout: %v", err)
+		return errors.NewInternalError("Failed to logout").WithInternal(err)
 	}
 	return nil
 }
@@ -234,23 +242,23 @@ func (s *Service) ValidateToken(tokenString string) (*Claims, error) {
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("invalid token: %v", err)
+		return nil, errors.NewUnauthorizedError("Invalid token")
 	}
 
 	claims, ok := token.Claims.(*Claims)
 	if !ok || !token.Valid {
-		return nil, fmt.Errorf("invalid token claims")
+		return nil, errors.NewUnauthorizedError("Invalid token claims")
 	}
 
 	// Check if token is expired
 	if claims.ExpiresAt != nil && claims.ExpiresAt.Before(time.Now()) {
-		return nil, fmt.Errorf("token expired")
+		return nil, errors.NewUnauthorizedError("Token expired")
 	}
 
 	// Verify user still exists and is active
 	var user models.User
 	if err := s.db.Where("id = ? AND is_active = true", claims.UserID).First(&user).Error; err != nil {
-		return nil, fmt.Errorf("user not found or inactive")
+		return nil, errors.NewUnauthorizedError("User not found or inactive")
 	}
 
 	return claims, nil
@@ -260,7 +268,10 @@ func (s *Service) ValidateToken(tokenString string) (*Claims, error) {
 func (s *Service) GetProfile(userID string) (*UserResponse, error) {
 	var user models.User
 	if err := s.db.Where("id = ?", userID).First(&user).Error; err != nil {
-		return nil, fmt.Errorf("user not found")
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.NewNotFoundError("User")
+		}
+		return nil, errors.NewInternalError("Failed to fetch user").WithInternal(err)
 	}
 
 	return s.userToResponse(&user), nil
@@ -270,7 +281,10 @@ func (s *Service) GetProfile(userID string) (*UserResponse, error) {
 func (s *Service) UpdateProfile(userID string, updates map[string]interface{}) (*UserResponse, error) {
 	var user models.User
 	if err := s.db.Where("id = ?", userID).First(&user).Error; err != nil {
-		return nil, fmt.Errorf("user not found")
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.NewNotFoundError("User")
+		}
+		return nil, errors.NewInternalError("Failed to fetch user").WithInternal(err)
 	}
 
 	// Update allowed fields
@@ -283,7 +297,7 @@ func (s *Service) UpdateProfile(userID string, updates map[string]interface{}) (
 
 	// Reload user
 	if err := s.db.Where("id = ?", userID).First(&user).Error; err != nil {
-		return nil, fmt.Errorf("failed to reload user")
+		return nil, errors.NewInternalError("Failed to reload user").WithInternal(err)
 	}
 
 	return s.userToResponse(&user), nil
@@ -293,12 +307,15 @@ func (s *Service) UpdateProfile(userID string, updates map[string]interface{}) (
 func (s *Service) ChangePassword(userID, currentPassword, newPassword string) error {
 	var user models.User
 	if err := s.db.Where("id = ?", userID).First(&user).Error; err != nil {
-		return fmt.Errorf("user not found")
+		if err == gorm.ErrRecordNotFound {
+			return errors.NewNotFoundError("User")
+		}
+		return errors.NewInternalError("Failed to fetch user").WithInternal(err)
 	}
 
 	// Verify current password
 	if !user.CheckPassword(currentPassword) {
-		return fmt.Errorf("current password is incorrect")
+		return errors.NewUnauthorizedError("Current password is incorrect")
 	}
 
 	// Validate new password strength
@@ -311,12 +328,12 @@ func (s *Service) ChangePassword(userID, currentPassword, newPassword string) er
 	user.PasswordChangedAt = time.Now()
 	
 	if err := s.db.Save(&user).Error; err != nil {
-		return fmt.Errorf("failed to update password: %v", err)
+		return errors.NewInternalError("Failed to update password").WithInternal(err)
 	}
 
 	// Invalidate all sessions for security
 	if err := s.db.Model(&models.Session{}).Where("user_id = ?", userID).Update("is_active", false).Error; err != nil {
-		return fmt.Errorf("failed to invalidate sessions: %v", err)
+		return errors.NewInternalError("Failed to invalidate sessions").WithInternal(err)
 	}
 
 	return nil
@@ -326,14 +343,14 @@ func (s *Service) ChangePassword(userID, currentPassword, newPassword string) er
 func (s *Service) ForgotPassword(email string) error {
 	var user models.User
 	if err := s.db.Where("email = ? AND is_active = true", email).First(&user).Error; err != nil {
-		// Don't reveal if email exists or not
+		// Don't reveal if email exists or not (security best practice)
 		return nil
 	}
 
 	// Generate reset token
 	resetToken, err := s.generateSecureToken()
 	if err != nil {
-		return fmt.Errorf("failed to generate reset token: %v", err)
+		return errors.NewInternalError("Failed to generate reset token").WithInternal(err)
 	}
 
 	// Create password reset token record
@@ -344,7 +361,7 @@ func (s *Service) ForgotPassword(email string) error {
 	}
 
 	if err := s.db.Create(&resetTokenRecord).Error; err != nil {
-		return fmt.Errorf("failed to create reset token: %v", err)
+		return errors.NewInternalError("Failed to create reset token").WithInternal(err)
 	}
 
 	// TODO: Send password reset email
@@ -358,13 +375,16 @@ func (s *Service) ResetPassword(token, newPassword string) error {
 	// Find valid reset token
 	var resetToken models.PasswordResetToken
 	if err := s.db.Where("token = ? AND expires_at > ? AND used_at IS NULL", token, time.Now()).First(&resetToken).Error; err != nil {
-		return fmt.Errorf("invalid or expired reset token")
+		return errors.NewUnauthorizedError("Invalid or expired reset token")
 	}
 
 	// Get user
 	var user models.User
 	if err := s.db.Where("id = ?", resetToken.UserID).First(&user).Error; err != nil {
-		return fmt.Errorf("user not found")
+		if err == gorm.ErrRecordNotFound {
+			return errors.NewNotFoundError("User")
+		}
+		return errors.NewInternalError("Failed to fetch user").WithInternal(err)
 	}
 
 	// Validate new password strength
@@ -377,7 +397,7 @@ func (s *Service) ResetPassword(token, newPassword string) error {
 	user.PasswordChangedAt = time.Now()
 	
 	if err := s.db.Save(&user).Error; err != nil {
-		return fmt.Errorf("failed to update password: %v", err)
+		return errors.NewInternalError("Failed to update password").WithInternal(err)
 	}
 
 	// Mark reset token as used
@@ -387,7 +407,7 @@ func (s *Service) ResetPassword(token, newPassword string) error {
 
 	// Invalidate all sessions for security
 	if err := s.db.Model(&models.Session{}).Where("user_id = ?", user.ID).Update("is_active", false).Error; err != nil {
-		return fmt.Errorf("failed to invalidate sessions: %v", err)
+		return errors.NewInternalError("Failed to invalidate sessions").WithInternal(err)
 	}
 
 	return nil
@@ -453,11 +473,11 @@ func (s *Service) generateSecureToken() (string, error) {
 // validatePasswordStrength validates password strength
 func (s *Service) validatePasswordStrength(password string) error {
 	if len(password) < 8 {
-		return fmt.Errorf("password must be at least 8 characters long")
+		return errors.NewValidationError("Password must be at least 8 characters long")
 	}
 
 	if len(password) > 128 {
-		return fmt.Errorf("password must be less than 128 characters")
+		return errors.NewValidationError("Password must be less than 128 characters")
 	}
 
 	hasUpper := false
@@ -479,16 +499,16 @@ func (s *Service) validatePasswordStrength(password string) error {
 	}
 
 	if !hasUpper {
-		return fmt.Errorf("password must contain at least one uppercase letter")
+		return errors.NewValidationError("Password must contain at least one uppercase letter")
 	}
 	if !hasLower {
-		return fmt.Errorf("password must contain at least one lowercase letter")
+		return errors.NewValidationError("Password must contain at least one lowercase letter")
 	}
 	if !hasDigit {
-		return fmt.Errorf("password must contain at least one digit")
+		return errors.NewValidationError("Password must contain at least one digit")
 	}
 	if !hasSpecial {
-		return fmt.Errorf("password must contain at least one special character")
+		return errors.NewValidationError("Password must contain at least one special character")
 	}
 
 	return nil
