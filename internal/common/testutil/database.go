@@ -14,23 +14,49 @@ import (
 // Uses Postgres test database from environment or defaults to test instance
 func SetupTestDB(t *testing.T) (*gorm.DB, func()) {
 	// Get database URL from environment or use default
-	testDBURL := "postgres://fleettracker:password123@localhost:5432/fleettracker?sslmode=disable"
+	// Try common PostgreSQL configurations
+	var testDBURL string
 	
-	// Check if we're in CI environment (GitHub Actions)
-	if os.Getenv("CI") == "true" {
-		// In CI, use localhost instead of host.docker.internal
-		testDBURL = "postgres://fleettracker:password123@localhost:5432/fleettracker?sslmode=disable"
-	} else if os.Getenv("DATABASE_URL") != "" {
+	if os.Getenv("DATABASE_URL") != "" {
 		// Use environment variable if available
 		testDBURL = os.Getenv("DATABASE_URL")
+	} else {
+		// Try common PostgreSQL configurations
+		// First try with postgres user (most common)
+		testDBURL = "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
+		
+		// If that fails, we'll try other configurations
 	}
 
-	// Create database connection
-	db, err := gorm.Open(postgres.Open(testDBURL), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent), // Silent mode for tests
-	})
+	// Create database connection with fallback configurations
+	var db *gorm.DB
+	var err error
+	
+	// Try different database configurations
+	configs := []string{
+		testDBURL, // First try the configured URL
+		"postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable",
+		"postgres://postgres:@localhost:5432/postgres?sslmode=disable",
+		"postgres://fleettracker:password123@localhost:5432/fleettracker?sslmode=disable",
+	}
+	
+	for i, config := range configs {
+		if config == "" {
+			continue
+		}
+		
+		db, err = gorm.Open(postgres.Open(config), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Silent), // Silent mode for tests
+		})
+		if err == nil {
+			t.Logf("Connected to database using config %d", i+1)
+			break
+		}
+		t.Logf("Failed to connect with config %d: %v", i+1, err)
+	}
+	
 	if err != nil {
-		t.Fatalf("Failed to create test database: %v", err)
+		t.Fatalf("Failed to create test database with any configuration. Please ensure PostgreSQL is running locally. Last error: %v", err)
 	}
 
 	// Auto-migrate all models

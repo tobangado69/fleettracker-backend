@@ -275,19 +275,25 @@ migrate-create:
 migrate: migrate-up
 
 # Seed database with test data
+# Note: Run from inside Docker network since Windows path issues
 seed:
 	@echo "🌱 Seeding database with test data..."
-	@go run cmd/seed/main.go
-	@echo "✅ Database seeded successfully!"
+	@echo "Note: Seeding directly via psql due to connection issues from host"
+	@docker exec fleettracker-postgres psql -U fleettracker -d fleettracker -c "\
+		INSERT INTO companies (name, email, npwp, city, province, country) \
+		SELECT 'PT Fleet Indonesia', 'contact@fleet.id', '01.234.567.8-901.000', 'Jakarta', 'DKI Jakarta', 'Indonesia' \
+		WHERE NOT EXISTS (SELECT 1 FROM companies WHERE email = 'contact@fleet.id');"
+	@echo "✅ Basic seed data inserted! For full seeding, use the seed container or run seeds manually"
+	@echo "   Or connect to pgAdmin and run seed scripts there"
 
 seed-companies:
 	@echo "🏢 Seeding companies only..."
-	@go run cmd/seed/main.go --companies
+	@DATABASE_URL="postgres://fleettracker:password123@localhost:5432/fleettracker?sslmode=disable" go run cmd/seed/main.go --companies
 	@echo "✅ Companies seeded!"
 
 seed-users:
 	@echo "👥 Seeding users only..."
-	@go run cmd/seed/main.go --users
+	@DATABASE_URL="postgres://fleettracker:password123@localhost:5432/fleettracker?sslmode=disable" go run cmd/seed/main.go --users
 	@echo "✅ Users seeded!"
 
 # Database reset (drop, migrate, seed)

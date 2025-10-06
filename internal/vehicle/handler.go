@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"github.com/tobangado69/fleettracker-pro/backend/internal/common/middleware"
 )
 
 // Handler handles vehicle HTTP requests
@@ -23,11 +24,6 @@ func NewHandler(service *Service) *Handler {
 	}
 }
 
-// ErrorResponse represents an error response
-type ErrorResponse struct {
-	Error   string `json:"error"`
-	Message string `json:"message"`
-}
 
 // SuccessResponse represents a success response
 type SuccessResponse struct {
@@ -70,38 +66,26 @@ func (h *Handler) CreateVehicle(c *gin.Context) {
 	// Get company ID from JWT claims
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
 	var req CreateVehicleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
 	// Validate request
 	if err := h.validator.Struct(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "validation_error",
-			Message: err.Error(),
-		})
+		middleware.AbortWithValidation(c, err.Error())
 		return
 	}
 
 	// Create vehicle
 	vehicle, err := h.service.CreateVehicle(companyID.(string), req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "creation_failed",
-			Message: err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -129,19 +113,13 @@ func (h *Handler) GetVehicle(c *gin.Context) {
 	// Get company ID from JWT claims
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
 	vehicleID := c.Param("id")
 	if vehicleID == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: "vehicle ID is required",
-		})
+		middleware.AbortWithBadRequest(c, "vehicle ID is required")
 		return
 	}
 
@@ -149,16 +127,10 @@ func (h *Handler) GetVehicle(c *gin.Context) {
 	vehicle, err := h.service.GetVehicle(companyID.(string), vehicleID)
 	if err != nil {
 		if err.Error() == "vehicle not found" {
-			c.JSON(http.StatusNotFound, ErrorResponse{
-				Error:   "not_found",
-				Message: err.Error(),
-			})
+			middleware.AbortWithNotFound(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error:   "internal_error",
-			Message: err.Error(),
-		})
+		middleware.AbortWithInternal(c, err.Error(), err)
 		return
 	}
 
@@ -187,37 +159,25 @@ func (h *Handler) UpdateVehicle(c *gin.Context) {
 	// Get company ID from JWT claims
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
 	vehicleID := c.Param("id")
 	if vehicleID == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: "vehicle ID is required",
-		})
+		middleware.AbortWithBadRequest(c, "vehicle ID is required")
 		return
 	}
 
 	var req UpdateVehicleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
 	// Validate request
 	if err := h.validator.Struct(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "validation_error",
-			Message: err.Error(),
-		})
+		middleware.AbortWithValidation(c, err.Error())
 		return
 	}
 
@@ -225,16 +185,10 @@ func (h *Handler) UpdateVehicle(c *gin.Context) {
 	vehicle, err := h.service.UpdateVehicle(companyID.(string), vehicleID, req)
 	if err != nil {
 		if err.Error() == "vehicle not found" {
-			c.JSON(http.StatusNotFound, ErrorResponse{
-				Error:   "not_found",
-				Message: err.Error(),
-			})
+			middleware.AbortWithNotFound(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "update_failed",
-			Message: err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -262,19 +216,13 @@ func (h *Handler) DeleteVehicle(c *gin.Context) {
 	// Get company ID from JWT claims
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
 	vehicleID := c.Param("id")
 	if vehicleID == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: "vehicle ID is required",
-		})
+		middleware.AbortWithBadRequest(c, "vehicle ID is required")
 		return
 	}
 
@@ -282,16 +230,10 @@ func (h *Handler) DeleteVehicle(c *gin.Context) {
 	err := h.service.DeleteVehicle(companyID.(string), vehicleID)
 	if err != nil {
 		if err.Error() == "vehicle not found" {
-			c.JSON(http.StatusNotFound, ErrorResponse{
-				Error:   "not_found",
-				Message: err.Error(),
-			})
+			middleware.AbortWithNotFound(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "delete_failed",
-			Message: err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -328,10 +270,7 @@ func (h *Handler) ListVehicles(c *gin.Context) {
 	// Get company ID from JWT claims
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
@@ -393,10 +332,7 @@ func (h *Handler) ListVehicles(c *gin.Context) {
 	// List vehicles
 	vehicles, total, err := h.service.ListVehicles(companyID.(string), filters)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error:   "internal_error",
-			Message: err.Error(),
-		})
+		middleware.AbortWithInternal(c, err.Error(), err)
 		return
 	}
 
@@ -438,19 +374,13 @@ func (h *Handler) UpdateVehicleStatus(c *gin.Context) {
 	// Get company ID from JWT claims
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
 	vehicleID := c.Param("id")
 	if vehicleID == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: "vehicle ID is required",
-		})
+		middleware.AbortWithBadRequest(c, "vehicle ID is required")
 		return
 	}
 
@@ -460,10 +390,7 @@ func (h *Handler) UpdateVehicleStatus(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -471,16 +398,10 @@ func (h *Handler) UpdateVehicleStatus(c *gin.Context) {
 	err := h.service.UpdateVehicleStatus(companyID.(string), vehicleID, VehicleStatus(req.Status), req.Reason)
 	if err != nil {
 		if err.Error() == "vehicle not found" {
-			c.JSON(http.StatusNotFound, ErrorResponse{
-				Error:   "not_found",
-				Message: err.Error(),
-			})
+			middleware.AbortWithNotFound(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "update_failed",
-			Message: err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -509,19 +430,13 @@ func (h *Handler) AssignDriver(c *gin.Context) {
 	// Get company ID from JWT claims
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
 	vehicleID := c.Param("id")
 	if vehicleID == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: "vehicle ID is required",
-		})
+		middleware.AbortWithBadRequest(c, "vehicle ID is required")
 		return
 	}
 
@@ -530,20 +445,14 @@ func (h *Handler) AssignDriver(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
 	// Assign driver
 	err := h.service.AssignDriver(companyID.(string), vehicleID, req.DriverID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "assignment_failed",
-			Message: err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -570,29 +479,20 @@ func (h *Handler) UnassignDriver(c *gin.Context) {
 	// Get company ID from JWT claims
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
 	vehicleID := c.Param("id")
 	if vehicleID == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: "vehicle ID is required",
-		})
+		middleware.AbortWithBadRequest(c, "vehicle ID is required")
 		return
 	}
 
 	// Unassign driver
 	err := h.service.UnassignDriver(companyID.(string), vehicleID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "unassignment_failed",
-			Message: err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -619,19 +519,13 @@ func (h *Handler) GetVehicleDriver(c *gin.Context) {
 	// Get company ID from JWT claims
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
 	vehicleID := c.Param("id")
 	if vehicleID == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: "vehicle ID is required",
-		})
+		middleware.AbortWithBadRequest(c, "vehicle ID is required")
 		return
 	}
 
@@ -639,16 +533,10 @@ func (h *Handler) GetVehicleDriver(c *gin.Context) {
 	driver, err := h.service.GetVehicleDriver(companyID.(string), vehicleID)
 	if err != nil {
 		if err.Error() == "no driver assigned to this vehicle" {
-			c.JSON(http.StatusNotFound, ErrorResponse{
-				Error:   "not_found",
-				Message: err.Error(),
-			})
+			middleware.AbortWithNotFound(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error:   "internal_error",
-			Message: err.Error(),
-		})
+		middleware.AbortWithInternal(c, err.Error(), err)
 		return
 	}
 
@@ -677,19 +565,13 @@ func (h *Handler) UpdateInspectionDate(c *gin.Context) {
 	// Get company ID from JWT claims
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
 	vehicleID := c.Param("id")
 	if vehicleID == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: "vehicle ID is required",
-		})
+		middleware.AbortWithBadRequest(c, "vehicle ID is required")
 		return
 	}
 
@@ -698,20 +580,14 @@ func (h *Handler) UpdateInspectionDate(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
 	// Parse inspection date
 	inspectionDate, err := time.Parse("2006-01-02", req.InspectionDate)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_date",
-			Message: "inspection date must be in YYYY-MM-DD format",
-		})
+		middleware.AbortWithBadRequest(c, "inspection date must be in YYYY-MM-DD format")
 		return
 	}
 
@@ -719,16 +595,10 @@ func (h *Handler) UpdateInspectionDate(c *gin.Context) {
 	err = h.service.UpdateInspectionDate(companyID.(string), vehicleID, inspectionDate)
 	if err != nil {
 		if err.Error() == "vehicle not found" {
-			c.JSON(http.StatusNotFound, ErrorResponse{
-				Error:   "not_found",
-				Message: err.Error(),
-			})
+			middleware.AbortWithNotFound(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "update_failed",
-			Message: err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 

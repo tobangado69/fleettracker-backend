@@ -2,11 +2,13 @@ package payment
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/tobangado69/fleettracker-pro/backend/internal/common/config"
 	"github.com/tobangado69/fleettracker-pro/backend/internal/common/repository"
+	apperrors "github.com/tobangado69/fleettracker-pro/backend/pkg/errors"
 	"github.com/tobangado69/fleettracker-pro/backend/pkg/models"
 	"gorm.io/gorm"
 )
@@ -80,7 +82,10 @@ func (s *Service) GenerateInvoice(ctx context.Context, req *InvoiceRequest) (*In
 	// Get company details for NPWP and tax information
 	company, err := s.repoManager.GetCompanies().GetByID(ctx, req.CompanyID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get company: %w", err)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("company")
+		}
+		return nil, apperrors.Wrap(err, "failed to get company")
 	}
 
 	// Generate invoice number (Indonesian format: INV/YYYY/MM/XXXX)
@@ -89,7 +94,7 @@ func (s *Service) GenerateInvoice(ctx context.Context, req *InvoiceRequest) (*In
 	// Calculate billing period
 	startDate, endDate, err := s.parseBillingPeriod(req.BillingPeriod)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse billing period: %w", err)
+		return nil, apperrors.Wrap(err, "failed to parse billing period")
 	}
 
 	// Calculate amounts (assuming subscription-based billing)
@@ -139,7 +144,7 @@ func (s *Service) GenerateInvoice(ctx context.Context, req *InvoiceRequest) (*In
 
 	// Save invoice to database
 	if err := s.repoManager.InvoiceRepository().Create(ctx, invoice); err != nil {
-		return nil, fmt.Errorf("failed to create invoice: %w", err)
+		return nil, apperrors.Wrap(err, "failed to create invoice")
 	}
 
 	// Generate payment instructions
@@ -167,12 +172,15 @@ func (s *Service) ConfirmPayment(ctx context.Context, req *PaymentConfirmationRe
 	// Get invoice
 	invoice, err := s.repoManager.GetInvoices().GetByID(ctx, req.InvoiceID)
 	if err != nil {
-		return fmt.Errorf("failed to get invoice: %w", err)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return apperrors.NewNotFoundError("invoice")
+		}
+		return apperrors.Wrap(err, "failed to get invoice")
 	}
 
 	// Validate payment amount
 	if req.TransferAmount != invoice.TotalAmount {
-		return fmt.Errorf("payment amount mismatch: expected %.2f, got %.2f", invoice.TotalAmount, req.TransferAmount)
+		return apperrors.NewBadRequestError(fmt.Sprintf("payment amount mismatch: expected %.2f, got %.2f", invoice.TotalAmount, req.TransferAmount))
 	}
 
 	// Create payment record
@@ -201,7 +209,7 @@ func (s *Service) ConfirmPayment(ctx context.Context, req *PaymentConfirmationRe
 
 	// Save payment
 	if err := s.repoManager.PaymentRepository().Create(ctx, payment); err != nil {
-		return fmt.Errorf("failed to create payment: %w", err)
+		return apperrors.Wrap(err, "failed to create payment")
 	}
 
 	// Update invoice
@@ -210,7 +218,7 @@ func (s *Service) ConfirmPayment(ctx context.Context, req *PaymentConfirmationRe
 	invoice.PaymentID = &payment.ID
 
 	if err := s.repoManager.InvoiceRepository().Update(ctx, invoice); err != nil {
-		return fmt.Errorf("failed to update invoice: %w", err)
+		return apperrors.Wrap(err, "failed to update invoice")
 	}
 
 	return nil
@@ -247,12 +255,18 @@ func (s *Service) GetInvoices(ctx context.Context, companyID string, status stri
 func (s *Service) GetPaymentInstructions(ctx context.Context, invoiceID string) (*PaymentInstructions, error) {
 	invoice, err := s.repoManager.GetInvoices().GetByID(ctx, invoiceID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get invoice: %w", err)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("invoice")
+		}
+		return nil, apperrors.Wrap(err, "failed to get invoice")
 	}
 
 	company, err := s.repoManager.GetCompanies().GetByID(ctx, invoice.CompanyID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get company: %w", err)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("company")
+		}
+		return nil, apperrors.Wrap(err, "failed to get company")
 	}
 
 	instructions := s.generatePaymentInstructions(invoice, company)
@@ -264,17 +278,20 @@ func (s *Service) GenerateSubscriptionBilling(ctx context.Context, req *Subscrip
 	// Get subscription
 	_, err := s.repoManager.GetSubscriptions().GetByID(ctx, req.SubscriptionID)
 	if err != nil {
-		return fmt.Errorf("failed to get subscription: %w", err)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return apperrors.NewNotFoundError("subscription")
+		}
+		return apperrors.Wrap(err, "failed to get subscription")
 	}
 
 	// Parse dates
 	_, err = time.Parse("2006-01-02", req.StartDate)
 	if err != nil {
-		return fmt.Errorf("invalid start date: %w", err)
+		return apperrors.NewValidationError("invalid start date format")
 	}
 	endDate, err := time.Parse("2006-01-02", req.EndDate)
 	if err != nil {
-		return fmt.Errorf("invalid end date: %w", err)
+		return apperrors.NewValidationError("invalid end date format")
 	}
 
 	// Create invoice request
@@ -289,7 +306,7 @@ func (s *Service) GenerateSubscriptionBilling(ctx context.Context, req *Subscrip
 	// Generate invoice
 	_, err = s.GenerateInvoice(ctx, invoiceReq)
 	if err != nil {
-		return fmt.Errorf("failed to generate subscription billing: %w", err)
+		return apperrors.Wrap(err, "failed to generate subscription billing")
 	}
 
 	return nil
@@ -315,7 +332,7 @@ func (s *Service) generateInvoiceNumber(companyID string) string {
 }
 
 // parseBillingPeriod parses billing period string
-func (s *Service) parseBillingPeriod(period string) (time.Time, time.Time, error) {
+func (s *Service) parseBillingPeriod(_ string) (time.Time, time.Time, error) {
 	// Simple parsing - can be enhanced
 	now := time.Now()
 	startDate := now.AddDate(0, -1, 0) // Last month
@@ -344,7 +361,7 @@ func (s *Service) generatePaymentInstructions(invoice *models.Invoice, company *
 }
 
 // generateInvoicePDF creates PDF content (placeholder)
-func (s *Service) generateInvoicePDF(invoice *models.Invoice, company *models.Company) string {
+func (s *Service) generateInvoicePDF(_ *models.Invoice, _ *models.Company) string {
 	// This would use a PDF generation library like gofpdf
 	// For now, return a placeholder
 	return "PDF_CONTENT_PLACEHOLDER"

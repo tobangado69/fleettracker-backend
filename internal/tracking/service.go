@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/websocket"
+	apperrors "github.com/tobangado69/fleettracker-pro/backend/pkg/errors"
 	"gorm.io/gorm"
 
 	"github.com/tobangado69/fleettracker-pro/backend/pkg/models"
@@ -146,18 +147,24 @@ func (s *Service) ProcessGPSData(req GPSDataRequest) (*models.GPSTrack, error) {
 	// Check if vehicle exists and is active
 	var vehicle models.Vehicle
 	if err := s.db.Where("id = ? AND is_active = ?", req.VehicleID, true).First(&vehicle).Error; err != nil {
-		return nil, errors.New("vehicle not found or inactive")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("vehicle")
+		}
+		return nil, apperrors.Wrap(err, "failed to validate vehicle")
 	}
 
 	// Check if driver exists and is active
 	var driver models.Driver
 	if err := s.db.Where("id = ? AND is_active = ?", req.DriverID, true).First(&driver).Error; err != nil {
-		return nil, errors.New("driver not found or inactive")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("driver")
+		}
+		return nil, apperrors.Wrap(err, "failed to validate driver")
 	}
 
 	// Validate driver is assigned to vehicle
 	if driver.VehicleID == nil || *driver.VehicleID != req.VehicleID {
-		return nil, errors.New("driver not assigned to this vehicle")
+		return nil, apperrors.NewBadRequestError("driver not assigned to this vehicle")
 	}
 
 	// Create GPS track
@@ -201,22 +208,22 @@ func (s *Service) ProcessGPSData(req GPSDataRequest) (*models.GPSTrack, error) {
 func (s *Service) validateGPSCoordinates(lat, lng, accuracy float64) error {
 	// Validate latitude
 	if lat < -90 || lat > 90 {
-		return errors.New("invalid latitude: must be between -90 and 90 degrees")
+		return apperrors.NewValidationError("invalid latitude: must be between -90 and 90 degrees")
 	}
 
 	// Validate longitude
 	if lng < -180 || lng > 180 {
-		return errors.New("invalid longitude: must be between -180 and 180 degrees")
+		return apperrors.NewValidationError("invalid longitude: must be between -180 and 180 degrees")
 	}
 
 	// Validate accuracy (filter out inaccurate readings)
 	if accuracy > 50 {
-		return errors.New("GPS accuracy too low: accuracy must be less than 50 meters")
+		return apperrors.NewValidationError("GPS accuracy too low: accuracy must be less than 50 meters")
 	}
 
 	// Check for impossible coordinates (middle of ocean, etc.)
 	if s.isImpossibleLocation(lat, lng) {
-		return errors.New("GPS coordinates appear to be invalid")
+		return apperrors.NewValidationError("GPS coordinates appear to be invalid")
 	}
 
 	return nil
@@ -246,7 +253,7 @@ func (s *Service) isImpossibleLocation(lat, lng float64) bool {
 }
 
 // updateVehicleLocation updates the vehicle's last known location
-func (s *Service) updateVehicleLocation(vehicleID string, lat, lng, speed float64, timestamp time.Time) error {
+func (s *Service) updateVehicleLocation(vehicleID string, lat, lng, _ float64, timestamp time.Time) error {
 	return s.db.Model(&models.Vehicle{}).Where("id = ?", vehicleID).Updates(map[string]interface{}{
 		"last_latitude":   lat,
 		"last_longitude":  lng,
@@ -434,9 +441,9 @@ func (s *Service) GetCurrentLocation(vehicleID string) (*models.GPSTrack, error)
 	var gpsTrack models.GPSTrack
 	if err := s.db.Where("vehicle_id = ?", vehicleID).Order("timestamp DESC").First(&gpsTrack).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("no GPS data found for vehicle")
+			return nil, apperrors.NewNotFoundError("GPS data for vehicle")
 		}
-		return nil, fmt.Errorf("failed to get current location: %w", err)
+		return nil, apperrors.Wrap(err, "failed to get current location")
 	}
 
 	return &gpsTrack, nil
@@ -446,23 +453,23 @@ func (s *Service) GetCurrentLocation(vehicleID string) (*models.GPSTrack, error)
 func (s *Service) getCachedLocation(vehicleID string) (*models.GPSTrack, error) {
 	key := fmt.Sprintf("vehicle:location:%s", vehicleID)
 	result := s.redis.HGetAll(ctx, key)
-	
+
 	if result.Err() != nil {
-		return nil, result.Err()
+		return nil, apperrors.Wrap(result.Err(), "failed to get cached location")
 	}
-	
+
 	data := result.Val()
 	if len(data) == 0 {
-		return nil, errors.New("no cached data")
+		return nil, apperrors.NewNotFoundError("cached location data")
 	}
-	
+
 	// Parse cached data
 	lat, _ := strconv.ParseFloat(data["latitude"], 64)
 	lng, _ := strconv.ParseFloat(data["longitude"], 64)
 	speed, _ := strconv.ParseFloat(data["speed"], 64)
 	heading, _ := strconv.ParseFloat(data["heading"], 64)
 	timestamp, _ := strconv.ParseInt(data["timestamp"], 10, 64)
-	
+
 	return &models.GPSTrack{
 		VehicleID: vehicleID,
 		Latitude:  lat,
@@ -500,7 +507,7 @@ func (s *Service) GetLocationHistory(vehicleID string, filters GPSFilters) ([]mo
 
 	// Get total count
 	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, fmt.Errorf("failed to count GPS tracks: %w", err)
+		return nil, 0, apperrors.Wrap(err, "failed to count GPS tracks")
 	}
 
 	// Apply sorting
@@ -528,7 +535,7 @@ func (s *Service) GetLocationHistory(vehicleID string, filters GPSFilters) ([]mo
 
 	// Execute query
 	if err := query.Find(&gpsTracks).Error; err != nil {
-		return nil, 0, fmt.Errorf("failed to get location history: %w", err)
+		return nil, 0, apperrors.Wrap(err, "failed to get location history")
 	}
 
 	return gpsTracks, total, nil
@@ -539,12 +546,18 @@ func (s *Service) ProcessDriverEvent(req DriverEventRequest) (*models.DriverEven
 	// Validate vehicle and driver
 	var vehicle models.Vehicle
 	if err := s.db.Where("id = ? AND is_active = ?", req.VehicleID, true).First(&vehicle).Error; err != nil {
-		return nil, errors.New("vehicle not found or inactive")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("vehicle")
+		}
+		return nil, apperrors.Wrap(err, "failed to validate vehicle")
 	}
 
 	var driver models.Driver
 	if err := s.db.Where("id = ? AND is_active = ?", req.DriverID, true).First(&driver).Error; err != nil {
-		return nil, errors.New("driver not found or inactive")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("driver")
+		}
+		return nil, apperrors.Wrap(err, "failed to validate driver")
 	}
 
 	// Create driver event
@@ -631,7 +644,7 @@ func (s *Service) calculatePerformanceImpact(eventType, severity string) float64
 func (s *Service) HandleWebSocket(c *gin.Context) {
 	// Upgrade HTTP connection to WebSocket
 	upgrader := websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
+		CheckOrigin: func(_ *http.Request) bool {
 			return true // In production, implement proper origin checking
 		},
 	}
@@ -697,12 +710,18 @@ func (s *Service) StartTrip(req TripRequest) (*models.Trip, error) {
 	// Validate vehicle and driver
 	var vehicle models.Vehicle
 	if err := s.db.Where("id = ? AND is_active = ?", req.VehicleID, true).First(&vehicle).Error; err != nil {
-		return nil, errors.New("vehicle not found or inactive")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("vehicle")
+		}
+		return nil, apperrors.Wrap(err, "failed to validate vehicle")
 	}
 
 	var driver models.Driver
 	if err := s.db.Where("id = ? AND is_active = ?", req.DriverID, true).First(&driver).Error; err != nil {
-		return nil, errors.New("driver not found or inactive")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("driver")
+		}
+		return nil, apperrors.Wrap(err, "failed to validate driver")
 	}
 
 	// Create trip
@@ -730,9 +749,12 @@ func (s *Service) StartTrip(req TripRequest) (*models.Trip, error) {
 func (s *Service) EndTrip(req TripRequest) (*models.Trip, error) {
 	// Find active trip
 	var trip models.Trip
-	if err := s.db.Where("vehicle_id = ? AND driver_id = ? AND status = ?", 
+	if err := s.db.Where("vehicle_id = ? AND driver_id = ? AND status = ?",
 		req.VehicleID, req.DriverID, "active").First(&trip).Error; err != nil {
-		return nil, errors.New("no active trip found")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("active trip")
+		}
+		return nil, apperrors.Wrap(err, "failed to find active trip")
 	}
 
 	// Update trip end data
@@ -825,7 +847,10 @@ func (s *Service) CreateGeofence(req GeofenceRequest) (*models.Geofence, error) 
 	// Validate company exists
 	var company models.Company
 	if err := s.db.Where("id = ? AND is_active = ?", req.CompanyID, true).First(&company).Error; err != nil {
-		return nil, errors.New("company not found or inactive")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("company")
+		}
+		return nil, apperrors.Wrap(err, "failed to validate company")
 	}
 
 	// Create geofence
@@ -855,13 +880,16 @@ func (s *Service) CheckGeofenceViolations(vehicleID string, lat, lng float64) ([
 	// Get vehicle's company ID
 	var vehicle models.Vehicle
 	if err := s.db.Where("id = ?", vehicleID).First(&vehicle).Error; err != nil {
-		return nil, err
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("vehicle")
+		}
+		return nil, apperrors.Wrap(err, "failed to get vehicle")
 	}
 
 	// Get active geofences for the company
 	var geofences []models.Geofence
 	if err := s.db.Where("company_id = ? AND is_active = ?", vehicle.CompanyID, true).Find(&geofences).Error; err != nil {
-		return nil, err
+		return nil, apperrors.Wrap(err, "failed to get geofences")
 	}
 
 	// Check each geofence

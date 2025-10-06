@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tobangado69/fleettracker-pro/backend/internal/common/middleware"
 )
 
 // SuccessResponse represents a success response
@@ -13,18 +14,6 @@ type SuccessResponse struct {
 	Message string      `json:"message,omitempty" example:"Operation successful"`
 }
 
-// ErrorResponse represents an error response
-type ErrorResponse struct {
-	Error   string `json:"error" example:"Bad Request"`
-	Message string `json:"message" example:"Invalid request data"`
-}
-
-// ValidationErrorResponse represents a validation error response
-type ValidationErrorResponse struct {
-	Error   string                 `json:"error" example:"Validation Error"`
-	Message string                 `json:"message" example:"Request validation failed"`
-	Details map[string]interface{} `json:"details,omitempty"`
-}
 
 // RefreshTokenRequest represents refresh token request
 type RefreshTokenRequest struct {
@@ -75,19 +64,13 @@ func (h *Handler) Register(c *gin.Context) {
 	var req RegisterRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid request",
-			"message": err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
 	user, err := h.service.Register(req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Registration failed",
-			"message": err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -112,19 +95,13 @@ func (h *Handler) Login(c *gin.Context) {
 	var req LoginRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid request",
-			"message": err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
 	user, tokens, err := h.service.Login(req)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":   "Login failed",
-			"message": err.Error(),
-		})
+		middleware.AbortWithUnauthorized(c, err.Error())
 		return
 	}
 
@@ -152,19 +129,13 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid request",
-			"message": err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
 	tokens, err := h.service.RefreshToken(req.RefreshToken)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":   "Token refresh failed",
-			"message": err.Error(),
-		})
+		middleware.AbortWithUnauthorized(c, err.Error())
 		return
 	}
 
@@ -189,10 +160,7 @@ func (h *Handler) Logout(c *gin.Context) {
 	// Get access token from Authorization header
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Authorization header required",
-			"message": "Access token not provided",
-		})
+		middleware.AbortWithBadRequest(c, "Access token not provided")
 		return
 	}
 
@@ -204,10 +172,7 @@ func (h *Handler) Logout(c *gin.Context) {
 
 	err := h.service.Logout(tokenString)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Logout failed",
-			"message": err.Error(),
-		})
+		middleware.AbortWithInternal(c, err.Error(), err)
 		return
 	}
 
@@ -230,19 +195,13 @@ func (h *Handler) GetProfile(c *gin.Context) {
 	// Get user ID from JWT claims (set by middleware)
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":   "Unauthorized",
-			"message": "User ID not found in context",
-		})
+		middleware.AbortWithUnauthorized(c, "User ID not found in context")
 		return
 	}
 
 	user, err := h.service.GetProfile(userID.(string))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error":   "Profile not found",
-			"message": err.Error(),
-		})
+		middleware.AbortWithNotFound(c, err.Error())
 		return
 	}
 
@@ -267,28 +226,19 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 	// Get user ID from JWT claims (set by middleware)
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":   "Unauthorized",
-			"message": "User ID not found in context",
-		})
+		middleware.AbortWithUnauthorized(c, "User ID not found in context")
 		return
 	}
 
 	var updates map[string]interface{}
 	if err := c.ShouldBindJSON(&updates); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid request",
-			"message": err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
 	user, err := h.service.UpdateProfile(userID.(string), updates)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Profile update failed",
-			"message": err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -314,10 +264,7 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 	// Get user ID from JWT claims (set by middleware)
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":   "Unauthorized",
-			"message": "User ID not found in context",
-		})
+		middleware.AbortWithUnauthorized(c, "User ID not found in context")
 		return
 	}
 
@@ -327,19 +274,13 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid request",
-			"message": err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
 	err := h.service.ChangePassword(userID.(string), req.CurrentPassword, req.NewPassword)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Password change failed",
-			"message": err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -365,19 +306,13 @@ func (h *Handler) ForgotPassword(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid request",
-			"message": err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
 	err := h.service.ForgotPassword(req.Email)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Password reset failed",
-			"message": err.Error(),
-		})
+		middleware.AbortWithInternal(c, err.Error(), err)
 		return
 	}
 
@@ -403,19 +338,13 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid request",
-			"message": err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
 	err := h.service.ResetPassword(req.Token, req.NewPassword)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Password reset failed",
-			"message": err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 

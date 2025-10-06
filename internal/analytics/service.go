@@ -2,6 +2,7 @@ package analytics
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -11,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/tobangado69/fleettracker-pro/backend/internal/common/repository"
+	apperrors "github.com/tobangado69/fleettracker-pro/backend/pkg/errors"
 	"github.com/tobangado69/fleettracker-pro/backend/pkg/models"
 )
 
@@ -167,7 +169,7 @@ func (s *Service) GetFuelConsumption(ctx context.Context, companyID string, star
 
 	gpsTracks, err := s.repoManager.GetGPSTracks().List(ctx, filters, repository.Pagination{Page: 1, PageSize: 10000})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get GPS tracks: %w", err)
+		return nil, apperrors.Wrap(err, "failed to get GPS tracks")
 	}
 
 	// Calculate fuel consumption metrics
@@ -229,7 +231,10 @@ func (s *Service) GetDriverPerformance(ctx context.Context, companyID string, dr
 	// Get driver information
 	driver, err := s.repoManager.GetDrivers().GetByID(ctx, driverID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get driver: %w", err)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("driver")
+		}
+		return nil, apperrors.Wrap(err, "failed to get driver")
 	}
 
 	// Get GPS tracks for the driver
@@ -242,7 +247,7 @@ func (s *Service) GetDriverPerformance(ctx context.Context, companyID string, dr
 
 	gpsTracks, err := s.repoManager.GetGPSTracks().List(ctx, filters, repository.Pagination{Page: 1, PageSize: 10000})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get GPS tracks: %w", err)
+		return nil, apperrors.Wrap(err, "failed to get GPS tracks")
 	}
 
 	// Calculate behavior metrics
@@ -282,7 +287,7 @@ func (s *Service) GetFleetDashboard(ctx context.Context, companyID string) (*Fle
 	}
 	vehicles, err := s.repoManager.GetVehicles().List(ctx, vehicleFilters, repository.Pagination{Page: 1, PageSize: 1000})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get vehicles: %w", err)
+		return nil, apperrors.Wrap(err, "failed to get vehicles")
 	}
 
 	// Get recent trips
@@ -291,7 +296,7 @@ func (s *Service) GetFleetDashboard(ctx context.Context, companyID string) (*Fle
 	}
 	trips, err := s.repoManager.GetTrips().List(ctx, tripFilters, repository.Pagination{Page: 1, PageSize: 1000})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get trips: %w", err)
+		return nil, apperrors.Wrap(err, "failed to get trips")
 	}
 
 	// Calculate metrics
@@ -593,7 +598,7 @@ func (s *Service) generateDriverTrends(gpsTracks []*models.GPSTrack) []Trend {
 	return trends
 }
 
-func (s *Service) getMaintenanceAlerts(ctx context.Context, companyID string) []MaintenanceAlert {
+func (s *Service) getMaintenanceAlerts(_ context.Context, _ string) []MaintenanceAlert {
 	// Simplified maintenance alerts
 	// In real implementation, this would check actual maintenance schedules
 	alerts := []MaintenanceAlert{
@@ -609,7 +614,7 @@ func (s *Service) getMaintenanceAlerts(ctx context.Context, companyID string) []
 	return alerts
 }
 
-func (s *Service) getTopPerformers(ctx context.Context, companyID string) []DriverPerformance {
+func (s *Service) getTopPerformers(_ context.Context, _ string) []DriverPerformance {
 	// Simplified top performers
 	// In real implementation, this would query actual driver performance data
 	performers := []DriverPerformance{
@@ -627,7 +632,7 @@ func (s *Service) getTopPerformers(ctx context.Context, companyID string) []Driv
 	return performers
 }
 
-func (s *Service) calculateDriverHours(ctx context.Context, companyID string, period string) []DriverHours {
+func (s *Service) calculateDriverHours(_ context.Context, _ string, _ string) []DriverHours {
 	// Simplified driver hours calculation
 	// In real implementation, this would calculate actual working hours
 	hours := []DriverHours{
@@ -642,7 +647,7 @@ func (s *Service) calculateDriverHours(ctx context.Context, companyID string, pe
 	return hours
 }
 
-func (s *Service) getVehicleInspections(ctx context.Context, companyID string) []VehicleInspection {
+func (s *Service) getVehicleInspections(_ context.Context, _ string) []VehicleInspection {
 	// Simplified vehicle inspections
 	// In real implementation, this would check actual inspection records
 	inspections := []VehicleInspection{
@@ -658,7 +663,7 @@ func (s *Service) getVehicleInspections(ctx context.Context, companyID string) [
 	return inspections
 }
 
-func (s *Service) generateTaxReport(ctx context.Context, companyID string, period string) TaxReport {
+func (s *Service) generateTaxReport(_ context.Context, _ string, period string) TaxReport {
 	// Simplified tax report
 	// In real implementation, this would calculate actual revenue and taxes
 	totalRevenue := 100000000.0 // 100M IDR
@@ -673,7 +678,7 @@ func (s *Service) generateTaxReport(ctx context.Context, companyID string, perio
 	}
 }
 
-func (s *Service) checkRegulatoryCompliance(driverHours []DriverHours, vehicleInspections []VehicleInspection, taxReport TaxReport) RegulatoryCompliance {
+func (s *Service) checkRegulatoryCompliance(_ []DriverHours, _ []VehicleInspection, taxReport TaxReport) RegulatoryCompliance {
 	// Simplified compliance check
 	// In real implementation, this would check actual compliance status
 	return RegulatoryCompliance{
