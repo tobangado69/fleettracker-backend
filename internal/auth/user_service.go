@@ -2,7 +2,10 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
+	"log"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -20,28 +23,58 @@ func hashPassword(password string) (string, error) {
 	return string(hashedBytes), nil
 }
 
+// generateTemporaryPassword creates a secure random temporary password
+func generateTemporaryPassword() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	// Use base64 URL encoding and take first 16 characters for readability
+	password := base64.URLEncoding.EncodeToString(b)[:16]
+	// Make it more user-friendly: add uppercase, lowercase, number
+	return password + "!Aa1", nil
+}
+
+// sendInvitationEmail sends an email with login credentials to the new user
+func sendInvitationEmail(email, name, tempPassword string) {
+	// TODO: Implement actual email sending with SendGrid/AWS SES
+	// For now, just log the credentials
+	log.Println("")
+	log.Println("📧 ═══════════════════════════════════════════════════════════")
+	log.Printf("📧 USER INVITATION EMAIL")
+	log.Println("📧 ═══════════════════════════════════════════════════════════")
+	log.Printf("📧 To: %s (%s)", email, name)
+	log.Printf("📧 Login URL: http://localhost:8080/api/v1/auth/login")
+	log.Printf("📧 Email: %s", email)
+	log.Printf("📧 Temporary Password: %s", tempPassword)
+	log.Println("📧 ⚠️  You must change your password on first login!")
+	log.Println("📧 ═══════════════════════════════════════════════════════════")
+	log.Println("")
+}
+
 // toUserResponse converts models.User to UserResponse
 func toUserResponse(user *models.User) *UserResponse {
 	return &UserResponse{
-		ID:          user.ID,
-		Email:       user.Email,
-		Username:    user.Username,
-		FirstName:   user.FirstName,
-		LastName:    user.LastName,
-		Phone:       user.Phone,
-		Role:        user.Role,
-		CompanyID:   user.CompanyID,
-		IsActive:    user.IsActive,
-		IsVerified:  user.IsVerified,
-		LastLoginAt: user.LastLoginAt,
-		CreatedAt:   user.CreatedAt,
+		ID:                 user.ID,
+		Email:              user.Email,
+		Username:           user.Username,
+		FirstName:          user.FirstName,
+		LastName:           user.LastName,
+		Phone:              user.Phone,
+		Role:               user.Role,
+		CompanyID:          user.CompanyID,
+		IsActive:           user.IsActive,
+		IsVerified:         user.IsVerified,
+		MustChangePassword: user.MustChangePassword, // NEW: Include force password change flag
+		LastLoginAt:        user.LastLoginAt,
+		CreatedAt:          user.CreatedAt,
 	}
 }
 
-// CreateUserRequest represents a request to create a new user (admin-only)
+// CreateUserRequest represents a request to create a new user (admin-only, invite-only)
 type CreateUserRequest struct {
 	Email     string `json:"email" binding:"required,email"`
-	Password  string `json:"password" binding:"required,min=8"`
+	Password  string `json:"password"` // OPTIONAL: If not provided, temp password generated
 	FirstName string `json:"first_name" binding:"required"`
 	LastName  string `json:"last_name" binding:"required"`
 	Phone     string `json:"phone"`
@@ -105,27 +138,46 @@ func (s *Service) CreateUser(ctx context.Context, creatorUserID, creatorRole, cr
 		return nil, apperrors.NewConflictError(fmt.Sprintf("email %s already exists", req.Email))
 	}
 
+	// Generate temporary password if not provided (invite-only system)
+	password := req.Password
+	var tempPassword string
+	if password == "" {
+		// Generate secure temporary password
+		tempPass, err := generateTemporaryPassword()
+		if err != nil {
+			return nil, apperrors.NewInternalError(fmt.Sprintf("failed to generate temporary password: %v", err))
+		}
+		password = tempPass
+		tempPassword = tempPass // Save for email
+	}
+
 	// Hash password
-	hashedPassword, err := hashPassword(req.Password)
+	hashedPassword, err := hashPassword(password)
 	if err != nil {
 		return nil, apperrors.NewInternalError(fmt.Sprintf("failed to hash password: %v", err))
 	}
 
-	// Create user
+	// Create user with must_change_password = true for invite-only system
 	user := &models.User{
-		CompanyID: companyID,
-		Email:     req.Email,
-		Password:  hashedPassword,
-		FirstName: req.FirstName,
-		LastName:  req.LastName,
-		Phone:     req.Phone,
-		Role:      req.Role,
-		IsActive:  true,
-		Status:    "active",
+		CompanyID:          companyID,
+		Email:              req.Email,
+		Password:           hashedPassword,
+		FirstName:          req.FirstName,
+		LastName:           req.LastName,
+		Phone:              req.Phone,
+		Role:               req.Role,
+		IsActive:           true,
+		Status:             "active",
+		MustChangePassword: true, // NEW: Force password change on first login
 	}
 
 	if err := s.db.Create(user).Error; err != nil {
 		return nil, apperrors.NewInternalError(err.Error()).WithInternal(err)
+	}
+
+	// Send invitation email if temporary password was generated
+	if tempPassword != "" {
+		go sendInvitationEmail(user.Email, user.GetFullName(), tempPassword)
 	}
 
 	// Clear password before returning

@@ -37,9 +37,11 @@ func SeedSuperAdmin(db *gorm.DB) error {
 	now := time.Now()
 	superAdmin := models.User{
 		Email:              "admin@fleettracker.id",
-		Name:               "Super Administrator",
+		Username:           "superadmin",
+		FirstName:          "Super",
+		LastName:           "Administrator",
 		Role:               "super-admin",
-		PasswordHash:       string(hashedPassword),
+		Password:           string(hashedPassword),
 		IsActive:           true,
 		MustChangePassword: true, // Force password change on first login
 		CreatedAt:          now,

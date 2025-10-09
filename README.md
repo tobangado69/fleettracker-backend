@@ -139,23 +139,106 @@ docker-compose logs -f api
 ```
 
 ### **3. Run Locally (Development)**
-   ```bash
+```bash
 # Start database (Docker)
 docker-compose up -d postgres redis
 
 # Run migrations
-   make migrate-up
+make migrate-up
    
-# Seed database
+# Seed database (creates super-admin)
 make seed
 
+# ✅ Super-Admin Credentials:
+# Email: admin@fleettracker.id
+# Password: ChangeMe123!
+# ⚠️  MUST change password on first login!
+
 # Start server
-   make run
+make run
 # or
 go run cmd/server/main.go
 ```
 
-### **4. Access the API**
+### **4. Initial Setup & First Login**
+
+FleetTracker Pro uses an **invite-only** system for enhanced security.
+
+#### **Step 1: Super-Admin First Login**
+```bash
+# Login with super-admin credentials
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@fleettracker.id",
+    "password": "ChangeMe123!"
+  }'
+
+# Response includes:
+# {
+#   "user": { ... },
+#   "tokens": { "access_token": "...", "refresh_token": "..." },
+#   "must_change_password": true  ⚠️
+# }
+```
+
+#### **Step 2: Force Password Change**
+```bash
+# Change password (required before accessing other endpoints)
+curl -X PUT http://localhost:8080/api/v1/auth/change-password \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "current_password": "ChangeMe123!",
+    "new_password": "YourSecurePassword123!"
+  }'
+
+# ✅ Password changed, must_change_password = false
+# ✅ Full system access granted
+```
+
+#### **Step 3: User Onboarding Flow**
+
+FleetTracker Pro does **NOT** have public registration. All users must be invited by authorized administrators.
+
+**Creating Users (Invite-Only)**:
+```bash
+# Super-admin creates company owner
+POST /api/v1/users
+{
+  "email": "owner@companya.com",
+  "first_name": "John",
+  "last_name": "Doe",
+  "role": "owner",
+  "company_id": "company-uuid"  // super-admin can specify company
+}
+
+# Owner creates admin for their company
+POST /api/v1/users
+{
+  "email": "admin@companya.com",
+  "first_name": "Jane",
+  "last_name": "Smith",
+  "role": "admin"
+  // company_id automatically set to owner's company
+}
+
+# System generates temporary password and logs it
+# 📧 USER INVITATION EMAIL
+# 📧 To: admin@companya.com (Jane Smith)
+# 📧 Temporary Password: xYz123AbC!Aa1
+# 📧 User must change password on first login!
+```
+
+**User Invitation Flow**:
+1. Admin calls `POST /users` with email and role
+2. System generates secure temporary password
+3. Email sent with login credentials (logged for now)
+4. User logs in with temporary password
+5. User sees `must_change_password: true`
+6. User changes password before accessing system
+
+### **5. Access the API**
 ```bash
 # Health check
 curl http://localhost:8080/health

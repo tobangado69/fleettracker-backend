@@ -156,16 +156,17 @@ type TokenResponse struct {
 
 // UserResponse represents user response data
 type UserResponse struct {
-	ID          string    `json:"id"`
-	Email       string    `json:"email"`
-	Username    string    `json:"username"`
-	FirstName   string    `json:"first_name"`
-	LastName    string    `json:"last_name"`
-	Phone       string    `json:"phone"`
-	Role        string    `json:"role"`
-	CompanyID   string    `json:"company_id"`
-	IsActive    bool      `json:"is_active"`
-	IsVerified  bool      `json:"is_verified"`
+	ID                 string    `json:"id"`
+	Email              string    `json:"email"`
+	Username           string    `json:"username"`
+	FirstName          string    `json:"first_name"`
+	LastName           string    `json:"last_name"`
+	Phone              string    `json:"phone"`
+	Role               string    `json:"role"`
+	CompanyID          string    `json:"company_id"`
+	IsActive           bool      `json:"is_active"`
+	IsVerified         bool      `json:"is_verified"`
+	MustChangePassword bool      `json:"must_change_password"` // NEW: Force password change flag
 	LastLoginAt *time.Time `json:"last_login_at"`
 	CreatedAt   time.Time `json:"created_at"`
 }
@@ -424,12 +425,21 @@ func (s *Service) ChangePassword(userID, currentPassword, newPassword string) er
 		return err
 	}
 
-	// Update password
+	// Update password and clear must_change_password flag
+	now := time.Now()
 	user.Password = newPassword // Will be hashed in BeforeUpdate hook
-	user.PasswordChangedAt = time.Now()
+	user.PasswordChangedAt = now
+	user.MustChangePassword = false      // NEW: Clear force password change flag
+	user.LastPasswordChange = &now       // NEW: Track when password was changed
 	
 	if err := s.db.Save(&user).Error; err != nil {
 		return errors.NewInternalError("Failed to update password").WithInternal(err)
+	}
+
+	// Invalidate user cache
+	if err := s.cache.InvalidateUserCache(context.Background(), userID); err != nil {
+		// Log but don't fail - cache invalidation is not critical
+		fmt.Printf("Warning: Failed to invalidate user cache: %v\n", err)
 	}
 
 	// Invalidate all sessions for security
@@ -618,18 +628,19 @@ func (s *Service) validatePasswordStrength(password string) error {
 // userToResponse converts User model to UserResponse
 func (s *Service) userToResponse(user *models.User) *UserResponse {
 	return &UserResponse{
-		ID:          user.ID,
-		Email:       user.Email,
-		Username:    user.Username,
-		FirstName:   user.FirstName,
-		LastName:    user.LastName,
-		Phone:       user.Phone,
-		Role:        user.Role,
-		CompanyID:   user.CompanyID,
-		IsActive:    user.IsActive,
-		IsVerified:  user.IsVerified,
-		LastLoginAt: user.LastLoginAt,
-		CreatedAt:   user.CreatedAt,
+		ID:                 user.ID,
+		Email:              user.Email,
+		Username:           user.Username,
+		FirstName:          user.FirstName,
+		LastName:           user.LastName,
+		Phone:              user.Phone,
+		Role:               user.Role,
+		CompanyID:          user.CompanyID,
+		IsActive:           user.IsActive,
+		IsVerified:         user.IsVerified,
+		MustChangePassword: user.MustChangePassword, // NEW: Include force password change flag
+		LastLoginAt:        user.LastLoginAt,
+		CreatedAt:          user.CreatedAt,
 	}
 }
 

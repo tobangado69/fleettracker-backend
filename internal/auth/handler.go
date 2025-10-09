@@ -18,9 +18,10 @@ type SuccessResponse struct {
 
 // ErrorResponse represents an error response
 type ErrorResponse struct {
-	Success bool   `json:"success" example:"false"`
-	Error   string `json:"error" example:"Bad request"`
-	Message string `json:"message,omitempty" example:"Invalid input"`
+	Success bool        `json:"success" example:"false"`
+	Error   string      `json:"error" example:"Bad request"`
+	Message string      `json:"message,omitempty" example:"Invalid input"`
+	Data    interface{} `json:"data,omitempty"` // Additional error context
 }
 
 // ValidationErrorResponse represents validation error response
@@ -76,73 +77,24 @@ func NewHandler(service *Service) *Handler {
 // @Failure 403 {object} ErrorResponse "Registration closed - contact your admin"
 // @Failure 422 {object} ValidationErrorResponse
 // @Router /api/v1/auth/register [post]
+// Register endpoint is DEPRECATED and removed for security
+// @Summary [DEPRECATED] User registration
+// @Description This endpoint is deprecated. FleetTracker Pro uses an invite-only system. Contact your administrator.
+// @Tags auth
+// @Produce json
+// @Success 410 {object} ErrorResponse "Endpoint deprecated - use invite-only system"
+// @Router /api/v1/auth/register [post]
+// @Deprecated
 func (h *Handler) Register(c *gin.Context) {
-	var req RegisterRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		middleware.AbortWithBadRequest(c, err.Error())
-		return
-	}
-
-	// SECURITY: Check if this is the first user in the system
-	isFirst, err := h.service.IsFirstUser()
-	if err != nil {
-		middleware.AbortWithInternal(c, "Failed to check user count", err)
-		return
-	}
-
-	if !isFirst {
-		// Public registration is closed - users must be created by admins
-		c.JSON(http.StatusForbidden, ErrorResponse{
-			Success: false,
-			Error:   "Public registration is closed",
-			Message: "This is a SaaS platform with controlled access. New users must be created by your company administrator. If you need access, please contact your company owner or administrator.",
-		})
-		return
-	}
-
-	// Validate email
-	if err := validators.ValidateEmail(req.Email); err != nil {
-		middleware.AbortWithBadRequest(c, "Invalid email: "+err.Error())
-		return
-	}
-
-	// Validate username
-	if err := validators.ValidateUsername(req.Username); err != nil {
-		middleware.AbortWithBadRequest(c, "Invalid username: "+err.Error())
-		return
-	}
-
-	// Validate password
-	if err := validators.ValidatePassword(req.Password); err != nil {
-		middleware.AbortWithBadRequest(c, "Invalid password: "+err.Error())
-		return
-	}
-
-	// Validate phone if provided
-	if req.Phone != "" {
-		phoneClean := validators.CleanPhoneNumber(req.Phone)
-		if err := validators.ValidatePhoneNumber(phoneClean); err != nil {
-			middleware.AbortWithBadRequest(c, "Invalid phone: "+err.Error())
-			return
-		}
-		req.Phone = validators.FormatPhoneNumber(phoneClean)
-	}
-
-	// Sanitize text inputs
-	sanitizer := validators.NewSanitizer()
-	req.FirstName = sanitizer.SanitizeUserInput(req.FirstName, 100)
-	req.LastName = sanitizer.SanitizeUserInput(req.LastName, 100)
-
-	user, err := h.service.Register(req)
-	if err != nil {
-		middleware.AbortWithBadRequest(c, err.Error())
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{
-		"message": "User registered successfully",
-		"user":    user,
+	c.JSON(http.StatusGone, ErrorResponse{
+		Success: false,
+		Error:   "endpoint_deprecated",
+		Message: "Public registration is no longer supported. FleetTracker Pro uses an invite-only system. Please contact your company administrator to create an account, or contact support@fleettracker.id for help.",
+		Data: gin.H{
+			"reason":            "invite_only_system",
+			"how_to_get_access": "Contact your company administrator or support@fleettracker.id",
+			"documentation":     "See POST /api/v1/users endpoint for user creation by administrators",
+		},
 	})
 }
 
