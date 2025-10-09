@@ -10,6 +10,11 @@ import (
 func RunAll(db *gorm.DB) error {
 	log.Println("🌱 Starting database seeding...")
 
+	// Seed super-admin FIRST (entry point for the entire system)
+	if err := SeedSuperAdmin(db); err != nil {
+		return err
+	}
+
 	// Seed in dependency order
 	if err := SeedCompanies(db); err != nil {
 		return err
@@ -38,6 +43,7 @@ func RunAll(db *gorm.DB) error {
 	log.Println("✅ Database seeding completed successfully!")
 	log.Println("")
 	log.Println("📊 Seed Data Summary:")
+	log.Println("  - Super-Admin: 1 (platform administrator)")
 	log.Println("  - Companies: 2")
 	log.Println("  - Users: 5 (1 admin, 2 managers, 2 operators)")
 	log.Println("  - Vehicles: 10")
@@ -45,7 +51,11 @@ func RunAll(db *gorm.DB) error {
 	log.Println("  - GPS Tracks: 100+")
 	log.Println("  - Trips: 20")
 	log.Println("")
-	log.Println("🔐 Test Login Credentials:")
+	log.Println("🔐 Super-Admin Login (CHANGE PASSWORD IMMEDIATELY):")
+	log.Println("  Email: admin@fleettracker.id")
+	log.Println("  Password: ChangeMe123!")
+	log.Println("")
+	log.Println("🔐 Test Company Login:")
 	log.Println("  Email: admin@logistikjkt.co.id")
 	log.Println("  Password: password123")
 	log.Println("")

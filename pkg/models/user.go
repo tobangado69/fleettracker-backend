@@ -54,6 +54,10 @@ type User struct {
 	TwoFactorSecret  string    `json:"-" gorm:"type:varchar(255)"` // Hidden from JSON
 	PasswordChangedAt time.Time `json:"password_changed_at"`
 	
+	// Invite-Only System (Force password change on first login)
+	MustChangePassword bool       `json:"must_change_password" gorm:"default:true"`
+	LastPasswordChange *time.Time `json:"last_password_change"`
+	
 	// Timestamps
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
