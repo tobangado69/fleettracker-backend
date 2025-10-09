@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tobangado69/fleettracker-pro/backend/internal/common/config"
+	"github.com/tobangado69/fleettracker-pro/backend/internal/common/database"
 	"github.com/tobangado69/fleettracker-pro/backend/internal/common/repository"
 	"github.com/tobangado69/fleettracker-pro/backend/internal/common/testutil"
 )
@@ -17,8 +18,9 @@ func TestService_GenerateInvoice(t *testing.T) {
 	defer cleanup()
 
 	cfg := &config.Config{}
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
 	repoManager := repository.NewRepositoryManager(db)
-	service := NewService(db, cfg, repoManager)
+	service := NewService(db, redisClient, cfg, repoManager)
 
 	// Create test company
 	company := testutil.NewTestCompany()
@@ -86,8 +88,9 @@ func TestService_IndonesianTaxCalculation(t *testing.T) {
 	defer cleanup()
 
 	cfg := &config.Config{}
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
 	repoManager := repository.NewRepositoryManager(db)
-	service := NewService(db, cfg, repoManager)
+	service := NewService(db, redisClient, cfg, repoManager)
 
 	company := testutil.NewTestCompany()
 	require.NoError(t, db.Create(company).Error)
@@ -154,8 +157,9 @@ func TestService_InvoiceNumberFormat(t *testing.T) {
 	defer cleanup()
 
 	cfg := &config.Config{}
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
 	repoManager := repository.NewRepositoryManager(db)
-	service := NewService(db, cfg, repoManager)
+	service := NewService(db, redisClient, cfg, repoManager)
 
 	company := testutil.NewTestCompany()
 	require.NoError(t, db.Create(company).Error)
@@ -186,8 +190,9 @@ func TestService_ConfirmPayment(t *testing.T) {
 	defer cleanup()
 
 	cfg := &config.Config{}
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
 	repoManager := repository.NewRepositoryManager(db)
-	service := NewService(db, cfg, repoManager)
+	service := NewService(db, redisClient, cfg, repoManager)
 
 	// Create test company
 	company := testutil.NewTestCompany()
@@ -251,8 +256,9 @@ func TestService_GetPaymentInstructions(t *testing.T) {
 	defer cleanup()
 
 	cfg := &config.Config{}
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
 	repoManager := repository.NewRepositoryManager(db)
-	service := NewService(db, cfg, repoManager)
+	service := NewService(db, redisClient, cfg, repoManager)
 
 	// Create test company
 	company := testutil.NewTestCompany()
@@ -297,8 +303,9 @@ func TestService_GetInvoices(t *testing.T) {
 	defer cleanup()
 
 	cfg := &config.Config{}
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
 	repoManager := repository.NewRepositoryManager(db)
-	service := NewService(db, cfg, repoManager)
+	service := NewService(db, redisClient, cfg, repoManager)
 
 	// Create test company
 	company := testutil.NewTestCompany()
@@ -347,8 +354,9 @@ func TestService_IndonesianCurrencyFormat(t *testing.T) {
 	defer cleanup()
 
 	cfg := &config.Config{}
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
 	repoManager := repository.NewRepositoryManager(db)
-	service := NewService(db, cfg, repoManager)
+	service := NewService(db, redisClient, cfg, repoManager)
 
 	company := testutil.NewTestCompany()
 	require.NoError(t, db.Create(company).Error)
@@ -380,8 +388,9 @@ func TestService_TaxCompliance(t *testing.T) {
 	defer cleanup()
 
 	cfg := &config.Config{}
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
 	repoManager := repository.NewRepositoryManager(db)
-	service := NewService(db, cfg, repoManager)
+	service := NewService(db, redisClient, cfg, repoManager)
 
 	company := testutil.NewTestCompany()
 	require.NoError(t, db.Create(company).Error)
@@ -414,8 +423,9 @@ func TestService_DueDateCalculation(t *testing.T) {
 	defer cleanup()
 
 	cfg := &config.Config{}
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
 	repoManager := repository.NewRepositoryManager(db)
-	service := NewService(db, cfg, repoManager)
+	service := NewService(db, redisClient, cfg, repoManager)
 
 	company := testutil.NewTestCompany()
 	require.NoError(t, db.Create(company).Error)

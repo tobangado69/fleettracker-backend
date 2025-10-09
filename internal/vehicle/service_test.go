@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tobangado69/fleettracker-pro/backend/internal/common/database"
 	"github.com/tobangado69/fleettracker-pro/backend/internal/common/testutil"
 	"github.com/tobangado69/fleettracker-pro/backend/pkg/models"
 )
@@ -14,7 +15,8 @@ func TestService_CreateVehicle(t *testing.T) {
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 
-	service := NewService(db)
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
+	service := NewService(db, redisClient)
 
 	// Create test company
 	company := testutil.NewTestCompany()
@@ -112,7 +114,8 @@ func TestService_GetVehicle(t *testing.T) {
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 
-	service := NewService(db)
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
+	service := NewService(db, redisClient)
 
 	// Create test data
 	company := testutil.NewTestCompany()
@@ -142,7 +145,8 @@ func TestService_UpdateVehicle(t *testing.T) {
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 
-	service := NewService(db)
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
+	service := NewService(db, redisClient)
 
 	// Create test data
 	company := testutil.NewTestCompany()
@@ -183,7 +187,8 @@ func TestService_DeleteVehicle(t *testing.T) {
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 
-	service := NewService(db)
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
+	service := NewService(db, redisClient)
 
 	// Create test data
 	company := testutil.NewTestCompany()
@@ -209,7 +214,8 @@ func TestService_ListVehicles(t *testing.T) {
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 
-	service := NewService(db)
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
+	service := NewService(db, redisClient)
 
 	// Create test data
 	company := testutil.NewTestCompany()
@@ -260,7 +266,8 @@ func TestService_UpdateVehicleStatus(t *testing.T) {
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 
-	service := NewService(db)
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
+	service := NewService(db, redisClient)
 
 	// Create test data
 	company := testutil.NewTestCompany()
@@ -309,7 +316,8 @@ func TestService_AssignDriver(t *testing.T) {
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 
-	service := NewService(db)
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
+	service := NewService(db, redisClient)
 
 	// Create test data
 	company := testutil.NewTestCompany()
@@ -349,7 +357,8 @@ func TestService_GetVehicleDriver(t *testing.T) {
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 
-	service := NewService(db)
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
+	service := NewService(db, redisClient)
 
 	// Create test data
 	company := testutil.NewTestCompany()
@@ -379,7 +388,8 @@ func TestService_UpdateInspectionDate(t *testing.T) {
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 
-	service := NewService(db)
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
+	service := NewService(db, redisClient)
 
 	// Create test data
 	company := testutil.NewTestCompany()
@@ -405,7 +415,8 @@ func TestService_ValidateIndonesianCompliance(t *testing.T) {
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 
-	service := NewService(db)
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
+	service := NewService(db, redisClient)
 
 	tests := []struct {
 		name         string
@@ -454,7 +465,8 @@ func TestService_ValidateIndonesianLicensePlate(t *testing.T) {
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 
-	service := NewService(db)
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
+	service := NewService(db, redisClient)
 
 	tests := []struct {
 		name  string

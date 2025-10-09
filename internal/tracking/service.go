@@ -15,8 +15,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/websocket"
+	apperrors "github.com/tobangado69/fleettracker-pro/backend/pkg/errors"
 	"gorm.io/gorm"
 
+	"github.com/tobangado69/fleettracker-pro/backend/internal/common/realtime"
 	"github.com/tobangado69/fleettracker-pro/backend/pkg/models"
 )
 
@@ -24,9 +26,295 @@ var ctx = context.Background()
 
 // Service handles mobile GPS tracking operations
 type Service struct {
-	db           *gorm.DB
-	redis        *redis.Client
-	websocketHub *WebSocketHub
+	db                    *gorm.DB
+	redis                 *redis.Client
+	websocketHub          *realtime.WebSocketHub
+	localWebSocketHub     *WebSocketHub
+	cache                 *CacheService
+	analyticsBroadcaster  *realtime.AnalyticsBroadcaster
+	alertSystem           *realtime.AlertSystem
+}
+
+// CacheService provides caching functionality for tracking operations
+type CacheService struct {
+	redis *redis.Client
+}
+
+// NewCacheService creates a new cache service
+func NewCacheService(redis *redis.Client) *CacheService {
+	return &CacheService{redis: redis}
+}
+
+// GetCurrentLocationFromCache retrieves current vehicle location from cache
+func (cs *CacheService) GetCurrentLocationFromCache(ctx context.Context, vehicleID string) (*models.GPSTrack, error) {
+	key := fmt.Sprintf("vehicle:location:%s", vehicleID)
+	
+	result := cs.redis.HGetAll(ctx, key)
+	if result.Err() != nil {
+		if result.Err() == redis.Nil {
+			return nil, nil // Cache miss
+		}
+		return nil, fmt.Errorf("failed to get current location from cache: %w", result.Err())
+	}
+	
+	data := result.Val()
+	if len(data) == 0 {
+		return nil, nil // Cache miss
+	}
+	
+	// Parse cached data
+	lat, _ := strconv.ParseFloat(data["latitude"], 64)
+	lng, _ := strconv.ParseFloat(data["longitude"], 64)
+	speed, _ := strconv.ParseFloat(data["speed"], 64)
+	heading, _ := strconv.ParseFloat(data["heading"], 64)
+	timestamp, _ := strconv.ParseInt(data["timestamp"], 10, 64)
+	
+	return &models.GPSTrack{
+		VehicleID: vehicleID,
+		Latitude:  lat,
+		Longitude: lng,
+		Speed:     speed,
+		Heading:   heading,
+		Timestamp: time.Unix(timestamp, 0),
+	}, nil
+}
+
+// SetCurrentLocationInCache stores current vehicle location in cache
+func (cs *CacheService) SetCurrentLocationInCache(ctx context.Context, gpsTrack *models.GPSTrack, expiration time.Duration) error {
+	key := fmt.Sprintf("vehicle:location:%s", gpsTrack.VehicleID)
+	
+	location := map[string]interface{}{
+		"latitude":  gpsTrack.Latitude,
+		"longitude": gpsTrack.Longitude,
+		"speed":     gpsTrack.Speed,
+		"heading":   gpsTrack.Heading,
+		"timestamp": gpsTrack.Timestamp.Unix(),
+	}
+	
+	if err := cs.redis.HMSet(ctx, key, location).Err(); err != nil {
+		return fmt.Errorf("failed to set current location in cache: %w", err)
+	}
+	
+	if err := cs.redis.Expire(ctx, key, expiration).Err(); err != nil {
+		return fmt.Errorf("failed to set current location cache expiration: %w", err)
+	}
+	
+	return nil
+}
+
+// GetLocationHistoryFromCache retrieves location history from cache
+func (cs *CacheService) GetLocationHistoryFromCache(ctx context.Context, vehicleID string, filters GPSFilters) ([]models.GPSTrack, int64, error) {
+	cacheKey := cs.generateLocationHistoryCacheKey(vehicleID, filters)
+	
+	var result struct {
+		Tracks []models.GPSTrack `json:"tracks"`
+		Total  int64            `json:"total"`
+	}
+	
+	data, err := cs.redis.Get(ctx, cacheKey).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, 0, nil // Cache miss
+		}
+		return nil, 0, fmt.Errorf("failed to get location history from cache: %w", err)
+	}
+	
+	if err := json.Unmarshal([]byte(data), &result); err != nil {
+		return nil, 0, fmt.Errorf("failed to unmarshal location history from cache: %w", err)
+	}
+	
+	return result.Tracks, result.Total, nil
+}
+
+// SetLocationHistoryInCache stores location history in cache
+func (cs *CacheService) SetLocationHistoryInCache(ctx context.Context, vehicleID string, filters GPSFilters, tracks []models.GPSTrack, total int64, expiration time.Duration) error {
+	cacheKey := cs.generateLocationHistoryCacheKey(vehicleID, filters)
+	
+	result := struct {
+		Tracks []models.GPSTrack `json:"tracks"`
+		Total  int64            `json:"total"`
+	}{
+		Tracks: tracks,
+		Total:  total,
+	}
+	
+	data, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Errorf("failed to marshal location history for cache: %w", err)
+	}
+	
+	if err := cs.redis.Set(ctx, cacheKey, data, expiration).Err(); err != nil {
+		return fmt.Errorf("failed to set location history in cache: %w", err)
+	}
+	
+	return nil
+}
+
+// GetTripFromCache retrieves a trip from cache
+func (cs *CacheService) GetTripFromCache(ctx context.Context, tripID string) (*models.Trip, error) {
+	key := fmt.Sprintf("trip:%s", tripID)
+	
+	var trip models.Trip
+	data, err := cs.redis.Get(ctx, key).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, nil // Cache miss
+		}
+		return nil, fmt.Errorf("failed to get trip from cache: %w", err)
+	}
+	
+	if err := json.Unmarshal([]byte(data), &trip); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal trip from cache: %w", err)
+	}
+	
+	return &trip, nil
+}
+
+// SetTripInCache stores a trip in cache
+func (cs *CacheService) SetTripInCache(ctx context.Context, trip *models.Trip, expiration time.Duration) error {
+	key := fmt.Sprintf("trip:%s", trip.ID)
+	
+	data, err := json.Marshal(trip)
+	if err != nil {
+		return fmt.Errorf("failed to marshal trip for cache: %w", err)
+	}
+	
+	if err := cs.redis.Set(ctx, key, data, expiration).Err(); err != nil {
+		return fmt.Errorf("failed to set trip in cache: %w", err)
+	}
+	
+	return nil
+}
+
+// GetGeofenceFromCache retrieves a geofence from cache
+func (cs *CacheService) GetGeofenceFromCache(ctx context.Context, geofenceID string) (*models.Geofence, error) {
+	key := fmt.Sprintf("geofence:%s", geofenceID)
+	
+	var geofence models.Geofence
+	data, err := cs.redis.Get(ctx, key).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, nil // Cache miss
+		}
+		return nil, fmt.Errorf("failed to get geofence from cache: %w", err)
+	}
+	
+	if err := json.Unmarshal([]byte(data), &geofence); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal geofence from cache: %w", err)
+	}
+	
+	return &geofence, nil
+}
+
+// SetGeofenceInCache stores a geofence in cache
+func (cs *CacheService) SetGeofenceInCache(ctx context.Context, geofence *models.Geofence, expiration time.Duration) error {
+	key := fmt.Sprintf("geofence:%s", geofence.ID)
+	
+	data, err := json.Marshal(geofence)
+	if err != nil {
+		return fmt.Errorf("failed to marshal geofence for cache: %w", err)
+	}
+	
+	if err := cs.redis.Set(ctx, key, data, expiration).Err(); err != nil {
+		return fmt.Errorf("failed to set geofence in cache: %w", err)
+	}
+	
+	return nil
+}
+
+// GetGeofencesByCompanyFromCache retrieves geofences for a company from cache
+func (cs *CacheService) GetGeofencesByCompanyFromCache(ctx context.Context, companyID string) ([]models.Geofence, error) {
+	key := fmt.Sprintf("geofences:company:%s", companyID)
+	
+	var geofences []models.Geofence
+	data, err := cs.redis.Get(ctx, key).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, nil // Cache miss
+		}
+		return nil, fmt.Errorf("failed to get geofences from cache: %w", err)
+	}
+	
+	if err := json.Unmarshal([]byte(data), &geofences); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal geofences from cache: %w", err)
+	}
+	
+	return geofences, nil
+}
+
+// SetGeofencesByCompanyInCache stores geofences for a company in cache
+func (cs *CacheService) SetGeofencesByCompanyInCache(ctx context.Context, companyID string, geofences []models.Geofence, expiration time.Duration) error {
+	key := fmt.Sprintf("geofences:company:%s", companyID)
+	
+	data, err := json.Marshal(geofences)
+	if err != nil {
+		return fmt.Errorf("failed to marshal geofences for cache: %w", err)
+	}
+	
+	if err := cs.redis.Set(ctx, key, data, expiration).Err(); err != nil {
+		return fmt.Errorf("failed to set geofences in cache: %w", err)
+	}
+	
+	return nil
+}
+
+// InvalidateLocationHistoryCache removes location history cache for a vehicle
+func (cs *CacheService) InvalidateLocationHistoryCache(ctx context.Context, vehicleID string) error {
+	pattern := fmt.Sprintf("location:history:%s:*", vehicleID)
+	
+	keys, err := cs.redis.Keys(ctx, pattern).Result()
+	if err != nil {
+		return fmt.Errorf("failed to get location history cache keys: %w", err)
+	}
+	
+	if len(keys) > 0 {
+		if err := cs.redis.Del(ctx, keys...).Err(); err != nil {
+			return fmt.Errorf("failed to invalidate location history cache: %w", err)
+		}
+	}
+	
+	return nil
+}
+
+// InvalidateTripCache removes a trip from cache
+func (cs *CacheService) InvalidateTripCache(ctx context.Context, tripID string) error {
+	key := fmt.Sprintf("trip:%s", tripID)
+	
+	if err := cs.redis.Del(ctx, key).Err(); err != nil {
+		return fmt.Errorf("failed to invalidate trip cache: %w", err)
+	}
+	
+	return nil
+}
+
+// InvalidateGeofenceCache removes a geofence from cache
+func (cs *CacheService) InvalidateGeofenceCache(ctx context.Context, geofenceID string) error {
+	key := fmt.Sprintf("geofence:%s", geofenceID)
+	
+	if err := cs.redis.Del(ctx, key).Err(); err != nil {
+		return fmt.Errorf("failed to invalidate geofence cache: %w", err)
+	}
+	
+	return nil
+}
+
+// InvalidateGeofencesByCompanyCache removes geofences cache for a company
+func (cs *CacheService) InvalidateGeofencesByCompanyCache(ctx context.Context, companyID string) error {
+	key := fmt.Sprintf("geofences:company:%s", companyID)
+	
+	if err := cs.redis.Del(ctx, key).Err(); err != nil {
+		return fmt.Errorf("failed to invalidate geofences cache: %w", err)
+	}
+	
+	return nil
+}
+
+// generateLocationHistoryCacheKey creates a cache key for location history queries
+func (cs *CacheService) generateLocationHistoryCacheKey(vehicleID string, filters GPSFilters) string {
+	// Create a hash of the filters for the cache key
+	filterHash := fmt.Sprintf("%v", filters)
+	hash := fmt.Sprintf("%x", filterHash)
+	return fmt.Sprintf("location:history:%s:%s", vehicleID, hash)
 }
 
 // WebSocketHub manages WebSocket connections
@@ -36,6 +324,69 @@ type WebSocketHub struct {
 	register   chan *websocket.Conn
 	unregister chan *websocket.Conn
 	mutex      sync.RWMutex
+}
+
+// NewWebSocketHub creates a new WebSocket hub
+func NewWebSocketHub() *WebSocketHub {
+	return &WebSocketHub{
+		clients:    make(map[*websocket.Conn]bool),
+		broadcast:  make(chan []byte),
+		register:   make(chan *websocket.Conn),
+		unregister: make(chan *websocket.Conn),
+	}
+}
+
+// Register registers a new WebSocket connection
+func (h *WebSocketHub) Register(conn *websocket.Conn) {
+	h.register <- conn
+}
+
+// Unregister unregisters a WebSocket connection
+func (h *WebSocketHub) Unregister(conn *websocket.Conn) {
+	h.unregister <- conn
+}
+
+// Broadcast sends a message to all connected clients
+func (h *WebSocketHub) Broadcast(message []byte) {
+	h.broadcast <- message
+}
+
+// GetClientCount returns the number of connected clients
+func (h *WebSocketHub) GetClientCount() int {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+	return len(h.clients)
+}
+
+// Run starts the WebSocket hub
+func (h *WebSocketHub) Run() {
+	for {
+		select {
+		case conn := <-h.register:
+			h.mutex.Lock()
+			h.clients[conn] = true
+			h.mutex.Unlock()
+
+		case conn := <-h.unregister:
+			h.mutex.Lock()
+			if _, ok := h.clients[conn]; ok {
+				delete(h.clients, conn)
+				conn.Close()
+			}
+			h.mutex.Unlock()
+
+		case message := <-h.broadcast:
+			h.mutex.RLock()
+			for conn := range h.clients {
+				err := conn.WriteMessage(websocket.TextMessage, message)
+				if err != nil {
+					conn.Close()
+					delete(h.clients, conn)
+				}
+			}
+			h.mutex.RUnlock()
+		}
+	}
 }
 
 // GPSDataRequest represents GPS data from mobile device
@@ -119,21 +470,32 @@ type GeofenceRequest struct {
 
 // NewService creates a new tracking service
 func NewService(db *gorm.DB, redis *redis.Client) *Service {
-	hub := &WebSocketHub{
-		clients:    make(map[*websocket.Conn]bool),
-		broadcast:  make(chan []byte),
-		register:   make(chan *websocket.Conn),
-		unregister: make(chan *websocket.Conn),
+	// Create enhanced WebSocket hub
+	hub := realtime.NewWebSocketHub(redis, realtime.DefaultWebSocketConfig())
+	
+	// Create local WebSocket hub for additional functionality
+	localHub := NewWebSocketHub()
+	
+	// Create analytics broadcaster
+	analyticsBroadcaster := realtime.NewAnalyticsBroadcaster(hub, redis, db, nil)
+	
+	// Create alert system
+	alertSystem := realtime.NewAlertSystem(hub, redis)
+
+	service := &Service{
+		db:                   db,
+		redis:                redis,
+		websocketHub:         hub,
+		localWebSocketHub:    localHub,
+		cache:                NewCacheService(redis),
+		analyticsBroadcaster: analyticsBroadcaster,
+		alertSystem:          alertSystem,
 	}
 	
-	// Start WebSocket hub
-	go hub.run()
+	// Start the local WebSocket hub in a goroutine
+	go service.localWebSocketHub.Run()
 	
-	return &Service{
-		db:           db,
-		redis:        redis,
-		websocketHub: hub,
-	}
+	return service
 }
 
 // ProcessGPSData processes incoming GPS data from mobile devices
@@ -146,18 +508,24 @@ func (s *Service) ProcessGPSData(req GPSDataRequest) (*models.GPSTrack, error) {
 	// Check if vehicle exists and is active
 	var vehicle models.Vehicle
 	if err := s.db.Where("id = ? AND is_active = ?", req.VehicleID, true).First(&vehicle).Error; err != nil {
-		return nil, errors.New("vehicle not found or inactive")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("vehicle")
+		}
+		return nil, apperrors.Wrap(err, "failed to validate vehicle")
 	}
 
 	// Check if driver exists and is active
 	var driver models.Driver
 	if err := s.db.Where("id = ? AND is_active = ?", req.DriverID, true).First(&driver).Error; err != nil {
-		return nil, errors.New("driver not found or inactive")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("driver")
+		}
+		return nil, apperrors.Wrap(err, "failed to validate driver")
 	}
 
 	// Validate driver is assigned to vehicle
 	if driver.VehicleID == nil || *driver.VehicleID != req.VehicleID {
-		return nil, errors.New("driver not assigned to this vehicle")
+		return nil, apperrors.NewBadRequestError("driver not assigned to this vehicle")
 	}
 
 	// Create GPS track
@@ -188,11 +556,27 @@ func (s *Service) ProcessGPSData(req GPSDataRequest) (*models.GPSTrack, error) {
 	// Process driver behavior events
 	go s.processDriverBehavior(gpsTrack)
 
-	// Broadcast to WebSocket clients
+	// Broadcast real-time location update
+	go func() {
+		if err := s.analyticsBroadcaster.BroadcastVehicleLocationUpdate(ctx, gpsTrack); err != nil {
+			fmt.Printf("Failed to broadcast vehicle location update %s: %v\n", gpsTrack.VehicleID, err)
+		}
+	}()
+	
+	// Broadcast to local WebSocket clients
 	go s.broadcastGPSUpdate(gpsTrack)
 
-	// Cache current location in Redis
-	go s.cacheCurrentLocation(gpsTrack)
+	// Cache current location using new cache service
+	go func() {
+		if err := s.cache.SetCurrentLocationInCache(ctx, gpsTrack, 5*time.Minute); err != nil {
+			fmt.Printf("Failed to cache current location %s: %v\n", gpsTrack.VehicleID, err)
+		}
+		
+		// Invalidate location history cache for this vehicle
+		if err := s.cache.InvalidateLocationHistoryCache(ctx, gpsTrack.VehicleID); err != nil {
+			fmt.Printf("Failed to invalidate location history cache %s: %v\n", gpsTrack.VehicleID, err)
+		}
+	}()
 
 	return gpsTrack, nil
 }
@@ -201,22 +585,22 @@ func (s *Service) ProcessGPSData(req GPSDataRequest) (*models.GPSTrack, error) {
 func (s *Service) validateGPSCoordinates(lat, lng, accuracy float64) error {
 	// Validate latitude
 	if lat < -90 || lat > 90 {
-		return errors.New("invalid latitude: must be between -90 and 90 degrees")
+		return apperrors.NewValidationError("invalid latitude: must be between -90 and 90 degrees")
 	}
 
 	// Validate longitude
 	if lng < -180 || lng > 180 {
-		return errors.New("invalid longitude: must be between -180 and 180 degrees")
+		return apperrors.NewValidationError("invalid longitude: must be between -180 and 180 degrees")
 	}
 
 	// Validate accuracy (filter out inaccurate readings)
 	if accuracy > 50 {
-		return errors.New("GPS accuracy too low: accuracy must be less than 50 meters")
+		return apperrors.NewValidationError("GPS accuracy too low: accuracy must be less than 50 meters")
 	}
 
 	// Check for impossible coordinates (middle of ocean, etc.)
 	if s.isImpossibleLocation(lat, lng) {
-		return errors.New("GPS coordinates appear to be invalid")
+		return apperrors.NewValidationError("GPS coordinates appear to be invalid")
 	}
 
 	return nil
@@ -246,7 +630,7 @@ func (s *Service) isImpossibleLocation(lat, lng float64) bool {
 }
 
 // updateVehicleLocation updates the vehicle's last known location
-func (s *Service) updateVehicleLocation(vehicleID string, lat, lng, speed float64, timestamp time.Time) error {
+func (s *Service) updateVehicleLocation(vehicleID string, lat, lng, _ float64, timestamp time.Time) error {
 	return s.db.Model(&models.Vehicle{}).Where("id = ?", vehicleID).Updates(map[string]interface{}{
 		"last_latitude":   lat,
 		"last_longitude":  lng,
@@ -265,7 +649,8 @@ func (s *Service) processDriverBehavior(gpsTrack *models.GPSTrack) {
 
 	// Check for speed violations (Indonesian speed limits)
 	if gpsTrack.Speed > 80 { // 80 km/h is typical urban speed limit in Indonesia
-		if err := s.createDriverEvent(models.DriverEvent{
+		// Create driver event
+		event := models.DriverEvent{
 			DriverID:    *gpsTrack.DriverID,
 			VehicleID:   gpsTrack.VehicleID,
 			EventType:   "speed_violation",
@@ -274,10 +659,23 @@ func (s *Service) processDriverBehavior(gpsTrack *models.GPSTrack) {
 			Longitude:   gpsTrack.Longitude,
 			Speed:       gpsTrack.Speed,
 			Description: fmt.Sprintf("Speed violation: %.1f km/h", gpsTrack.Speed),
-		}); err != nil {
+		}
+		
+		if err := s.createDriverEvent(event); err != nil {
 			// Log error but don't fail the GPS tracking
 			fmt.Printf("Failed to create speed violation event: %v\n", err)
 		}
+		
+		// Create real-time alert
+		go func() {
+			// Get vehicle to get company ID
+			var vehicle models.Vehicle
+			if err := s.db.Where("id = ?", gpsTrack.VehicleID).First(&vehicle).Error; err == nil {
+				if err := s.alertSystem.CreateSpeedViolationAlert(ctx, vehicle.CompanyID, gpsTrack.VehicleID, *gpsTrack.DriverID, gpsTrack.Speed, 80, fmt.Sprintf("%.6f,%.6f", gpsTrack.Latitude, gpsTrack.Longitude)); err != nil {
+					fmt.Printf("Failed to create speed violation alert: %v\n", err)
+				}
+			}
+		}()
 	}
 
 	// Check for harsh braking
@@ -369,25 +767,31 @@ func (s *Service) getAccelerationSeverity(acceleration float64) string {
 
 // broadcastGPSUpdate broadcasts GPS update to WebSocket clients
 func (s *Service) broadcastGPSUpdate(gpsTrack *models.GPSTrack) {
+	// Create GPS update message
 	message := map[string]interface{}{
-		"type":       "gps_update",
+		"type":      "gps_update",
 		"vehicle_id": gpsTrack.VehicleID,
-		"driver_id":  gpsTrack.DriverID,
-		"latitude":   gpsTrack.Latitude,
-		"longitude":  gpsTrack.Longitude,
-		"speed":      gpsTrack.Speed,
-		"heading":    gpsTrack.Heading,
-		"timestamp":  gpsTrack.Timestamp,
+		"latitude":  gpsTrack.Latitude,
+		"longitude": gpsTrack.Longitude,
+		"speed":     gpsTrack.Speed,
+		"heading":   gpsTrack.Heading,
+		"timestamp": gpsTrack.Timestamp,
 	}
 	
-	// Convert to JSON and broadcast
-	if jsonData, err := json.Marshal(message); err == nil {
-		s.websocketHub.broadcast <- jsonData
+	// Marshal to JSON
+	data, err := json.Marshal(message)
+	if err != nil {
+		fmt.Printf("Failed to marshal GPS update message: %v\n", err)
+		return
 	}
+	
+	// Broadcast to local WebSocket clients
+	s.localWebSocketHub.Broadcast(data)
 }
 
 // broadcastDriverEvent broadcasts driver event to WebSocket clients
 func (s *Service) broadcastDriverEvent(event *models.DriverEvent) {
+	// Create driver event message
 	message := map[string]interface{}{
 		"type":        "driver_event",
 		"driver_id":   event.DriverID,
@@ -396,37 +800,33 @@ func (s *Service) broadcastDriverEvent(event *models.DriverEvent) {
 		"severity":    event.Severity,
 		"latitude":    event.Latitude,
 		"longitude":   event.Longitude,
-		"timestamp":   event.CreatedAt,
+		"speed":       event.Speed,
 		"description": event.Description,
+		"timestamp":   event.CreatedAt,
 	}
 	
-	// Convert to JSON and broadcast
-	if jsonData, err := json.Marshal(message); err == nil {
-		s.websocketHub.broadcast <- jsonData
+	// Marshal to JSON
+	data, err := json.Marshal(message)
+	if err != nil {
+		fmt.Printf("Failed to marshal driver event message: %v\n", err)
+		return
 	}
+	
+	// Broadcast to local WebSocket clients
+	s.localWebSocketHub.Broadcast(data)
 }
 
-// cacheCurrentLocation caches current location in Redis
-func (s *Service) cacheCurrentLocation(gpsTrack *models.GPSTrack) {
-	key := fmt.Sprintf("vehicle:location:%s", gpsTrack.VehicleID)
-	location := map[string]interface{}{
-		"latitude":  gpsTrack.Latitude,
-		"longitude": gpsTrack.Longitude,
-		"speed":     gpsTrack.Speed,
-		"heading":   gpsTrack.Heading,
-		"timestamp": gpsTrack.Timestamp.Unix(),
-	}
-	
-	// Cache for 5 minutes
-	s.redis.HMSet(ctx, key, location)
-	s.redis.Expire(ctx, key, 5*time.Minute)
-}
 
 // GetCurrentLocation gets the current location of a vehicle
 func (s *Service) GetCurrentLocation(vehicleID string) (*models.GPSTrack, error) {
-	// Try to get from Redis cache first
-	cached, err := s.getCachedLocation(vehicleID)
-	if err == nil && cached != nil {
+	// Try to get from cache first
+	cached, err := s.cache.GetCurrentLocationFromCache(ctx, vehicleID)
+	if err != nil {
+		// Log cache error but continue with database lookup
+		fmt.Printf("Cache error for current location %s: %v\n", vehicleID, err)
+	}
+	
+	if cached != nil {
 		return cached, nil
 	}
 
@@ -434,47 +834,34 @@ func (s *Service) GetCurrentLocation(vehicleID string) (*models.GPSTrack, error)
 	var gpsTrack models.GPSTrack
 	if err := s.db.Where("vehicle_id = ?", vehicleID).Order("timestamp DESC").First(&gpsTrack).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("no GPS data found for vehicle")
+			return nil, apperrors.NewNotFoundError("GPS data for vehicle")
 		}
-		return nil, fmt.Errorf("failed to get current location: %w", err)
+		return nil, apperrors.Wrap(err, "failed to get current location")
+	}
+
+	// Cache the result for 5 minutes (real-time data)
+	if err := s.cache.SetCurrentLocationInCache(ctx, &gpsTrack, 5*time.Minute); err != nil {
+		// Log cache error but don't fail the request
+		fmt.Printf("Failed to cache current location %s: %v\n", vehicleID, err)
 	}
 
 	return &gpsTrack, nil
 }
 
-// getCachedLocation gets location from Redis cache
-func (s *Service) getCachedLocation(vehicleID string) (*models.GPSTrack, error) {
-	key := fmt.Sprintf("vehicle:location:%s", vehicleID)
-	result := s.redis.HGetAll(ctx, key)
-	
-	if result.Err() != nil {
-		return nil, result.Err()
-	}
-	
-	data := result.Val()
-	if len(data) == 0 {
-		return nil, errors.New("no cached data")
-	}
-	
-	// Parse cached data
-	lat, _ := strconv.ParseFloat(data["latitude"], 64)
-	lng, _ := strconv.ParseFloat(data["longitude"], 64)
-	speed, _ := strconv.ParseFloat(data["speed"], 64)
-	heading, _ := strconv.ParseFloat(data["heading"], 64)
-	timestamp, _ := strconv.ParseInt(data["timestamp"], 10, 64)
-	
-	return &models.GPSTrack{
-		VehicleID: vehicleID,
-		Latitude:  lat,
-		Longitude: lng,
-		Speed:     speed,
-		Heading:   heading,
-		Timestamp: time.Unix(timestamp, 0),
-	}, nil
-}
 
 // GetLocationHistory gets historical GPS data for a vehicle
 func (s *Service) GetLocationHistory(vehicleID string, filters GPSFilters) ([]models.GPSTrack, int64, error) {
+	// Try to get from cache first
+	cachedTracks, cachedTotal, err := s.cache.GetLocationHistoryFromCache(ctx, vehicleID, filters)
+	if err != nil {
+		// Log cache error but continue with database lookup
+		fmt.Printf("Cache error for location history %s: %v\n", vehicleID, err)
+	}
+	
+	if cachedTracks != nil {
+		return cachedTracks, cachedTotal, nil
+	}
+
 	var gpsTracks []models.GPSTrack
 	var total int64
 
@@ -500,7 +887,7 @@ func (s *Service) GetLocationHistory(vehicleID string, filters GPSFilters) ([]mo
 
 	// Get total count
 	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, fmt.Errorf("failed to count GPS tracks: %w", err)
+		return nil, 0, apperrors.Wrap(err, "failed to count GPS tracks")
 	}
 
 	// Apply sorting
@@ -528,7 +915,13 @@ func (s *Service) GetLocationHistory(vehicleID string, filters GPSFilters) ([]mo
 
 	// Execute query
 	if err := query.Find(&gpsTracks).Error; err != nil {
-		return nil, 0, fmt.Errorf("failed to get location history: %w", err)
+		return nil, 0, apperrors.Wrap(err, "failed to get location history")
+	}
+
+	// Cache the result for 15 minutes (historical data)
+	if err := s.cache.SetLocationHistoryInCache(ctx, vehicleID, filters, gpsTracks, total, 15*time.Minute); err != nil {
+		// Log cache error but don't fail the request
+		fmt.Printf("Failed to cache location history %s: %v\n", vehicleID, err)
 	}
 
 	return gpsTracks, total, nil
@@ -539,12 +932,18 @@ func (s *Service) ProcessDriverEvent(req DriverEventRequest) (*models.DriverEven
 	// Validate vehicle and driver
 	var vehicle models.Vehicle
 	if err := s.db.Where("id = ? AND is_active = ?", req.VehicleID, true).First(&vehicle).Error; err != nil {
-		return nil, errors.New("vehicle not found or inactive")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("vehicle")
+		}
+		return nil, apperrors.Wrap(err, "failed to validate vehicle")
 	}
 
 	var driver models.Driver
 	if err := s.db.Where("id = ? AND is_active = ?", req.DriverID, true).First(&driver).Error; err != nil {
-		return nil, errors.New("driver not found or inactive")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("driver")
+		}
+		return nil, apperrors.Wrap(err, "failed to validate driver")
 	}
 
 	// Create driver event
@@ -629,27 +1028,46 @@ func (s *Service) calculatePerformanceImpact(eventType, severity string) float64
 
 // HandleWebSocket handles WebSocket connections for real-time tracking
 func (s *Service) HandleWebSocket(c *gin.Context) {
+	s.websocketHub.HandleWebSocket(c)
+}
+
+// HandleLocalWebSocket handles WebSocket connections using the local hub
+func (s *Service) HandleLocalWebSocket(c *gin.Context) {
 	// Upgrade HTTP connection to WebSocket
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
-			return true // In production, implement proper origin checking
+			return true // Allow all origins in development
 		},
 	}
-
+	
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to upgrade to WebSocket"})
+		fmt.Printf("Failed to upgrade WebSocket connection: %v\n", err)
 		return
 	}
-	defer conn.Close()
-
-	// Register client with hub
-	s.websocketHub.register <- conn
+	
+	// Register connection with local hub
+	s.localWebSocketHub.Register(conn)
+	
+	// Send welcome message
+	welcomeMsg := map[string]interface{}{
+		"type":    "welcome",
+		"message": "Connected to tracking WebSocket",
+		"client_count": s.localWebSocketHub.GetClientCount(),
+	}
+	
+	data, err := json.Marshal(welcomeMsg)
+	if err == nil {
+		conn.WriteMessage(websocket.TextMessage, data)
+	}
+	
+	// Handle incoming messages and cleanup on disconnect
 	defer func() {
-		s.websocketHub.unregister <- conn
+		s.localWebSocketHub.Unregister(conn)
+		conn.Close()
 	}()
-
-	// Handle WebSocket messages
+	
+	// Keep connection alive and handle incoming messages
 	for {
 		_, _, err := conn.ReadMessage()
 		if err != nil {
@@ -661,48 +1079,29 @@ func (s *Service) HandleWebSocket(c *gin.Context) {
 	}
 }
 
-// run starts the WebSocket hub
-func (hub *WebSocketHub) run() {
-	for {
-		select {
-		case conn := <-hub.register:
-			hub.mutex.Lock()
-			hub.clients[conn] = true
-			hub.mutex.Unlock()
-
-		case conn := <-hub.unregister:
-			hub.mutex.Lock()
-			if _, ok := hub.clients[conn]; ok {
-				delete(hub.clients, conn)
-				conn.Close()
-			}
-			hub.mutex.Unlock()
-
-		case message := <-hub.broadcast:
-			hub.mutex.RLock()
-			for conn := range hub.clients {
-				err := conn.WriteMessage(websocket.TextMessage, message)
-				if err != nil {
-					conn.Close()
-					delete(hub.clients, conn)
-				}
-			}
-			hub.mutex.RUnlock()
-		}
-	}
+// GetWebSocketClientCount returns the number of connected WebSocket clients
+func (s *Service) GetWebSocketClientCount() int {
+	return s.localWebSocketHub.GetClientCount()
 }
+
 
 // StartTrip starts a new trip
 func (s *Service) StartTrip(req TripRequest) (*models.Trip, error) {
 	// Validate vehicle and driver
 	var vehicle models.Vehicle
 	if err := s.db.Where("id = ? AND is_active = ?", req.VehicleID, true).First(&vehicle).Error; err != nil {
-		return nil, errors.New("vehicle not found or inactive")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("vehicle")
+		}
+		return nil, apperrors.Wrap(err, "failed to validate vehicle")
 	}
 
 	var driver models.Driver
 	if err := s.db.Where("id = ? AND is_active = ?", req.DriverID, true).First(&driver).Error; err != nil {
-		return nil, errors.New("driver not found or inactive")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("driver")
+		}
+		return nil, apperrors.Wrap(err, "failed to validate driver")
 	}
 
 	// Create trip
@@ -723,6 +1122,18 @@ func (s *Service) StartTrip(req TripRequest) (*models.Trip, error) {
 		return nil, fmt.Errorf("failed to create trip: %w", err)
 	}
 
+	// Cache the trip for 1 hour (active trips are frequently accessed)
+	if err := s.cache.SetTripInCache(ctx, trip, 1*time.Hour); err != nil {
+		fmt.Printf("Failed to cache trip %s: %v\n", trip.ID, err)
+	}
+
+	// Broadcast real-time trip update
+	go func() {
+		if err := s.analyticsBroadcaster.BroadcastTripUpdate(ctx, trip); err != nil {
+			fmt.Printf("Failed to broadcast trip update %s: %v\n", trip.ID, err)
+		}
+	}()
+
 	return trip, nil
 }
 
@@ -730,9 +1141,12 @@ func (s *Service) StartTrip(req TripRequest) (*models.Trip, error) {
 func (s *Service) EndTrip(req TripRequest) (*models.Trip, error) {
 	// Find active trip
 	var trip models.Trip
-	if err := s.db.Where("vehicle_id = ? AND driver_id = ? AND status = ?", 
+	if err := s.db.Where("vehicle_id = ? AND driver_id = ? AND status = ?",
 		req.VehicleID, req.DriverID, "active").First(&trip).Error; err != nil {
-		return nil, errors.New("no active trip found")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("active trip")
+		}
+		return nil, apperrors.Wrap(err, "failed to find active trip")
 	}
 
 	// Update trip end data
@@ -752,6 +1166,18 @@ func (s *Service) EndTrip(req TripRequest) (*models.Trip, error) {
 	if err := s.db.Save(&trip).Error; err != nil {
 		return nil, fmt.Errorf("failed to update trip: %w", err)
 	}
+
+	// Update trip cache with completed trip data
+	if err := s.cache.SetTripInCache(ctx, &trip, 2*time.Hour); err != nil {
+		fmt.Printf("Failed to cache completed trip %s: %v\n", trip.ID, err)
+	}
+
+	// Broadcast real-time trip update
+	go func() {
+		if err := s.analyticsBroadcaster.BroadcastTripUpdate(ctx, &trip); err != nil {
+			fmt.Printf("Failed to broadcast trip update %s: %v\n", trip.ID, err)
+		}
+	}()
 
 	return &trip, nil
 }
@@ -825,7 +1251,10 @@ func (s *Service) CreateGeofence(req GeofenceRequest) (*models.Geofence, error) 
 	// Validate company exists
 	var company models.Company
 	if err := s.db.Where("id = ? AND is_active = ?", req.CompanyID, true).First(&company).Error; err != nil {
-		return nil, errors.New("company not found or inactive")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("company")
+		}
+		return nil, apperrors.Wrap(err, "failed to validate company")
 	}
 
 	// Create geofence
@@ -847,6 +1276,16 @@ func (s *Service) CreateGeofence(req GeofenceRequest) (*models.Geofence, error) 
 		return nil, fmt.Errorf("failed to create geofence: %w", err)
 	}
 
+	// Cache the geofence for 1 hour
+	if err := s.cache.SetGeofenceInCache(ctx, geofence, 1*time.Hour); err != nil {
+		fmt.Printf("Failed to cache geofence %s: %v\n", geofence.ID, err)
+	}
+	
+	// Invalidate company geofences cache
+	if err := s.cache.InvalidateGeofencesByCompanyCache(ctx, req.CompanyID); err != nil {
+		fmt.Printf("Failed to invalidate company geofences cache %s: %v\n", req.CompanyID, err)
+	}
+
 	return geofence, nil
 }
 
@@ -855,13 +1294,29 @@ func (s *Service) CheckGeofenceViolations(vehicleID string, lat, lng float64) ([
 	// Get vehicle's company ID
 	var vehicle models.Vehicle
 	if err := s.db.Where("id = ?", vehicleID).First(&vehicle).Error; err != nil {
-		return nil, err
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("vehicle")
+		}
+		return nil, apperrors.Wrap(err, "failed to get vehicle")
 	}
 
-	// Get active geofences for the company
-	var geofences []models.Geofence
-	if err := s.db.Where("company_id = ? AND is_active = ?", vehicle.CompanyID, true).Find(&geofences).Error; err != nil {
-		return nil, err
+	// Try to get geofences from cache first
+	geofences, err := s.cache.GetGeofencesByCompanyFromCache(ctx, vehicle.CompanyID)
+	if err != nil {
+		// Log cache error but continue with database lookup
+		fmt.Printf("Cache error for geofences %s: %v\n", vehicle.CompanyID, err)
+	}
+	
+	if geofences == nil {
+		// Get active geofences for the company from database
+		if err := s.db.Where("company_id = ? AND is_active = ?", vehicle.CompanyID, true).Find(&geofences).Error; err != nil {
+			return nil, apperrors.Wrap(err, "failed to get geofences")
+		}
+		
+		// Cache the geofences for 30 minutes
+		if err := s.cache.SetGeofencesByCompanyInCache(ctx, vehicle.CompanyID, geofences, 30*time.Minute); err != nil {
+			fmt.Printf("Failed to cache geofences %s: %v\n", vehicle.CompanyID, err)
+		}
 	}
 
 	// Check each geofence

@@ -85,6 +85,31 @@ test:
 	@echo "🧪 Running tests..."
 	go test -v ./...
 
+# Run tests in Docker (for integration tests)
+test-docker:
+	@echo "🧪 Running tests in Docker environment..."
+	docker-compose --profile test run --rm test
+	@echo "✅ Docker tests completed!"
+
+# Run unit tests only (no database required)
+test-unit:
+	@echo "🧪 Running unit tests..."
+	go test ./internal/common/health/... ./internal/common/logging/... ./internal/common/validators/... -v -cover
+	@echo "✅ Unit tests completed!"
+
+# Run integration tests in Docker
+test-integration:
+	@echo "🧪 Running integration tests in Docker..."
+	docker-compose --profile test run --rm test go test ./internal/auth/... ./internal/driver/... ./internal/payment/... ./internal/tracking/... ./internal/vehicle/... -v -timeout 5m
+	@echo "✅ Integration tests completed!"
+
+# Run tests with coverage
+test-coverage:
+	@echo "📊 Running tests with coverage..."
+	go test ./... -coverprofile=coverage.out
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "✅ Coverage report generated: coverage.html"
+
 # Clean build artifacts
 clean:
 	@echo "🧹 Cleaning build artifacts..."
@@ -275,19 +300,25 @@ migrate-create:
 migrate: migrate-up
 
 # Seed database with test data
+# Note: Run from inside Docker network since Windows path issues
 seed:
 	@echo "🌱 Seeding database with test data..."
-	@go run cmd/seed/main.go
-	@echo "✅ Database seeded successfully!"
+	@echo "Note: Seeding directly via psql due to connection issues from host"
+	@docker exec fleettracker-postgres psql -U fleettracker -d fleettracker -c "\
+		INSERT INTO companies (name, email, npwp, city, province, country) \
+		SELECT 'PT Fleet Indonesia', 'contact@fleet.id', '01.234.567.8-901.000', 'Jakarta', 'DKI Jakarta', 'Indonesia' \
+		WHERE NOT EXISTS (SELECT 1 FROM companies WHERE email = 'contact@fleet.id');"
+	@echo "✅ Basic seed data inserted! For full seeding, use the seed container or run seeds manually"
+	@echo "   Or connect to pgAdmin and run seed scripts there"
 
 seed-companies:
 	@echo "🏢 Seeding companies only..."
-	@go run cmd/seed/main.go --companies
+	@DATABASE_URL="postgres://fleettracker:password123@localhost:5432/fleettracker?sslmode=disable" go run cmd/seed/main.go --companies
 	@echo "✅ Companies seeded!"
 
 seed-users:
 	@echo "👥 Seeding users only..."
-	@go run cmd/seed/main.go --users
+	@DATABASE_URL="postgres://fleettracker:password123@localhost:5432/fleettracker?sslmode=disable" go run cmd/seed/main.go --users
 	@echo "✅ Users seeded!"
 
 # Database reset (drop, migrate, seed)

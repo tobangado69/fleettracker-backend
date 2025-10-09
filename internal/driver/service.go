@@ -1,25 +1,163 @@
 package driver
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/go-redis/redis/v8"
+	apperrors "github.com/tobangado69/fleettracker-pro/backend/pkg/errors"
 	"github.com/tobangado69/fleettracker-pro/backend/pkg/models"
 	"gorm.io/gorm"
 )
 
 // Service handles driver operations
 type Service struct {
-	db *gorm.DB
+	db    *gorm.DB
+	redis *redis.Client
+	cache *CacheService
+}
+
+// CacheService provides caching functionality for driver operations
+type CacheService struct {
+	redis *redis.Client
+}
+
+// NewCacheService creates a new cache service
+func NewCacheService(redis *redis.Client) *CacheService {
+	return &CacheService{redis: redis}
+}
+
+// GetDriverFromCache retrieves a driver from cache
+func (cs *CacheService) GetDriverFromCache(ctx context.Context, driverID string) (*models.Driver, error) {
+	key := fmt.Sprintf("driver:%s", driverID)
+	
+	var driver models.Driver
+	data, err := cs.redis.Get(ctx, key).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, nil // Cache miss
+		}
+		return nil, fmt.Errorf("failed to get driver from cache: %w", err)
+	}
+	
+	if err := json.Unmarshal([]byte(data), &driver); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal driver from cache: %w", err)
+	}
+	
+	return &driver, nil
+}
+
+// SetDriverInCache stores a driver in cache
+func (cs *CacheService) SetDriverInCache(ctx context.Context, driver *models.Driver, expiration time.Duration) error {
+	key := fmt.Sprintf("driver:%s", driver.ID)
+	
+	data, err := json.Marshal(driver)
+	if err != nil {
+		return fmt.Errorf("failed to marshal driver for cache: %w", err)
+	}
+	
+	if err := cs.redis.Set(ctx, key, data, expiration).Err(); err != nil {
+		return fmt.Errorf("failed to set driver in cache: %w", err)
+	}
+	
+	return nil
+}
+
+// InvalidateDriverCache removes a driver from cache
+func (cs *CacheService) InvalidateDriverCache(ctx context.Context, driverID string) error {
+	key := fmt.Sprintf("driver:%s", driverID)
+	
+	if err := cs.redis.Del(ctx, key).Err(); err != nil {
+		return fmt.Errorf("failed to invalidate driver cache: %w", err)
+	}
+	
+	return nil
+}
+
+// GetDriverListFromCache retrieves a driver list from cache
+func (cs *CacheService) GetDriverListFromCache(ctx context.Context, companyID string, filters DriverFilters) ([]models.Driver, int64, error) {
+	cacheKey := cs.generateDriverListCacheKey(companyID, filters)
+	
+	var result struct {
+		Drivers []models.Driver `json:"drivers"`
+		Total   int64          `json:"total"`
+	}
+	
+	data, err := cs.redis.Get(ctx, cacheKey).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, 0, nil // Cache miss
+		}
+		return nil, 0, fmt.Errorf("failed to get driver list from cache: %w", err)
+	}
+	
+	if err := json.Unmarshal([]byte(data), &result); err != nil {
+		return nil, 0, fmt.Errorf("failed to unmarshal driver list from cache: %w", err)
+	}
+	
+	return result.Drivers, result.Total, nil
+}
+
+// SetDriverListInCache stores a driver list in cache
+func (cs *CacheService) SetDriverListInCache(ctx context.Context, companyID string, filters DriverFilters, drivers []models.Driver, total int64, expiration time.Duration) error {
+	cacheKey := cs.generateDriverListCacheKey(companyID, filters)
+	
+	result := struct {
+		Drivers []models.Driver `json:"drivers"`
+		Total   int64          `json:"total"`
+	}{
+		Drivers: drivers,
+		Total:   total,
+	}
+	
+	data, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Errorf("failed to marshal driver list for cache: %w", err)
+	}
+	
+	if err := cs.redis.Set(ctx, cacheKey, data, expiration).Err(); err != nil {
+		return fmt.Errorf("failed to set driver list in cache: %w", err)
+	}
+	
+	return nil
+}
+
+// InvalidateDriverListCache removes driver list cache for a company
+func (cs *CacheService) InvalidateDriverListCache(ctx context.Context, companyID string) error {
+	pattern := fmt.Sprintf("driver:list:%s:*", companyID)
+	
+	keys, err := cs.redis.Keys(ctx, pattern).Result()
+	if err != nil {
+		return fmt.Errorf("failed to get driver list cache keys: %w", err)
+	}
+	
+	if len(keys) > 0 {
+		if err := cs.redis.Del(ctx, keys...).Err(); err != nil {
+			return fmt.Errorf("failed to invalidate driver list cache: %w", err)
+		}
+	}
+	
+	return nil
+}
+
+// generateDriverListCacheKey creates a cache key for driver list queries
+func (cs *CacheService) generateDriverListCacheKey(companyID string, filters DriverFilters) string {
+	filterHash := fmt.Sprintf("%v", filters)
+	hash := fmt.Sprintf("%x", filterHash)
+	return fmt.Sprintf("driver:list:%s:%s", companyID, hash)
 }
 
 // NewService creates a new driver service
-func NewService(db *gorm.DB) *Service {
+func NewService(db *gorm.DB, redis *redis.Client) *Service {
 	return &Service{
-		db: db,
+		db:    db,
+		redis: redis,
+		cache: NewCacheService(redis),
 	}
 }
 
@@ -174,23 +312,23 @@ func (s *Service) CreateDriver(companyID string, req CreateDriverRequest) (*mode
 	// Check if NIK already exists
 	var existingDriver models.Driver
 	if err := s.db.Where("nik = ?", req.NIK).First(&existingDriver).Error; err == nil {
-		return nil, errors.New("driver with this NIK already exists")
+		return nil, apperrors.NewConflictError("driver with this NIK already exists")
 	}
 
 	// Check if SIM number already exists
 	if err := s.db.Where("sim_number = ?", req.SIMNumber).First(&existingDriver).Error; err == nil {
-		return nil, errors.New("driver with this SIM number already exists")
+		return nil, apperrors.NewConflictError("driver with this SIM number already exists")
 	}
 
 	// Check if email already exists
 	if err := s.db.Where("email = ?", req.Email).First(&existingDriver).Error; err == nil {
-		return nil, errors.New("driver with this email already exists")
+		return nil, apperrors.NewConflictError("driver with this email already exists")
 	}
 
 	// Calculate age from date of birth
 	age := time.Now().Year() - req.DateOfBirth.Year()
 	if age < 18 {
-		return nil, errors.New("driver must be at least 18 years old")
+		return nil, apperrors.NewValidationError("driver must be at least 18 years old")
 	}
 
 	// Create driver
@@ -222,7 +360,7 @@ func (s *Service) CreateDriver(companyID string, req CreateDriverRequest) (*mode
 
 	// Save to database
 	if err := s.db.Create(driver).Error; err != nil {
-		return nil, fmt.Errorf("failed to create driver: %w", err)
+		return nil, apperrors.Wrap(err, "failed to create driver")
 	}
 
 	return driver, nil
@@ -230,13 +368,32 @@ func (s *Service) CreateDriver(companyID string, req CreateDriverRequest) (*mode
 
 // GetDriver retrieves a driver by ID
 func (s *Service) GetDriver(companyID, driverID string) (*models.Driver, error) {
+	ctx := context.Background()
+	
+	// Try to get from cache first
+	cachedDriver, err := s.cache.GetDriverFromCache(ctx, driverID)
+	if err != nil {
+		// Log cache error but continue with database lookup
+		fmt.Printf("Cache error for driver %s: %v\n", driverID, err)
+	}
+	
+	if cachedDriver != nil && cachedDriver.CompanyID == companyID {
+		return cachedDriver, nil
+	}
+	
 	var driver models.Driver
 	
 	if err := s.db.Preload("Vehicle").Where("company_id = ? AND id = ?", companyID, driverID).First(&driver).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("driver not found")
+			return nil, apperrors.NewNotFoundError("driver")
 		}
-		return nil, fmt.Errorf("failed to get driver: %w", err)
+		return nil, apperrors.Wrap(err, "failed to get driver")
+	}
+
+	// Cache the result for 30 minutes
+	if err := s.cache.SetDriverInCache(ctx, &driver, 30*time.Minute); err != nil {
+		// Log cache error but don't fail the request
+		fmt.Printf("Failed to cache driver %s: %v\n", driverID, err)
 	}
 
 	return &driver, nil
@@ -278,7 +435,7 @@ func (s *Service) UpdateDriver(companyID, driverID string, req UpdateDriverReque
 	if req.NIK != nil && *req.NIK != driver.NIK {
 		var existingDriver models.Driver
 		if err := s.db.Where("nik = ? AND id != ?", *req.NIK, driverID).First(&existingDriver).Error; err == nil {
-			return nil, errors.New("driver with this NIK already exists")
+			return nil, apperrors.NewConflictError("driver with this NIK already exists")
 		}
 	}
 
@@ -286,7 +443,7 @@ func (s *Service) UpdateDriver(companyID, driverID string, req UpdateDriverReque
 	if req.SIMNumber != nil && *req.SIMNumber != driver.SIMNumber {
 		var existingDriver models.Driver
 		if err := s.db.Where("sim_number = ? AND id != ?", *req.SIMNumber, driverID).First(&existingDriver).Error; err == nil {
-			return nil, errors.New("driver with this SIM number already exists")
+			return nil, apperrors.NewConflictError("driver with this SIM number already exists")
 		}
 	}
 
@@ -294,7 +451,7 @@ func (s *Service) UpdateDriver(companyID, driverID string, req UpdateDriverReque
 	if req.Email != nil && *req.Email != driver.Email {
 		var existingDriver models.Driver
 		if err := s.db.Where("email = ? AND id != ?", *req.Email, driverID).First(&existingDriver).Error; err == nil {
-			return nil, errors.New("driver with this email already exists")
+			return nil, apperrors.NewConflictError("driver with this email already exists")
 		}
 	}
 
@@ -370,7 +527,7 @@ func (s *Service) UpdateDriver(companyID, driverID string, req UpdateDriverReque
 
 	// Save changes
 	if err := s.db.Save(driver).Error; err != nil {
-		return nil, fmt.Errorf("failed to update driver: %w", err)
+		return nil, apperrors.Wrap(err, "failed to update driver")
 	}
 
 	return driver, nil
@@ -386,12 +543,12 @@ func (s *Service) DeleteDriver(companyID, driverID string) error {
 
 	// Check if driver is assigned to a vehicle
 	if driver.VehicleID != nil {
-		return errors.New("cannot delete driver that is assigned to a vehicle")
+		return apperrors.NewBadRequestError("cannot delete driver that is assigned to a vehicle")
 	}
 
 	// Soft delete
 	if err := s.db.Delete(driver).Error; err != nil {
-		return fmt.Errorf("failed to delete driver: %w", err)
+		return apperrors.Wrap(err, "failed to delete driver")
 	}
 
 	return nil
@@ -455,7 +612,7 @@ func (s *Service) ListDrivers(companyID string, filters DriverFilters) ([]models
 
 	// Get total count
 	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, fmt.Errorf("failed to count drivers: %w", err)
+		return nil, 0, apperrors.Wrap(err, "failed to count drivers")
 	}
 
 	// Apply sorting
@@ -483,7 +640,7 @@ func (s *Service) ListDrivers(companyID string, filters DriverFilters) ([]models
 
 	// Execute query with preload
 	if err := query.Preload("Vehicle").Find(&drivers).Error; err != nil {
-		return nil, 0, fmt.Errorf("failed to list drivers: %w", err)
+		return nil, 0, apperrors.Wrap(err, "failed to list drivers")
 	}
 
 	return drivers, total, nil
@@ -499,7 +656,7 @@ func (s *Service) UpdateDriverStatus(companyID, driverID string, status DriverSt
 	driver.Status = string(status)
 	
 	if err := s.db.Save(driver).Error; err != nil {
-		return fmt.Errorf("failed to update driver status: %w", err)
+		return apperrors.Wrap(err, "failed to update driver status")
 	}
 
 	// TODO: Add status change history tracking
@@ -521,7 +678,7 @@ func (s *Service) UpdateDriverPerformance(companyID, driverID string, performanc
 	driver.OverallScore = (performance + safety + efficiency) / 3
 
 	if err := s.db.Save(driver).Error; err != nil {
-		return fmt.Errorf("failed to update driver performance: %w", err)
+		return apperrors.Wrap(err, "failed to update driver performance")
 	}
 
 	return nil
@@ -551,24 +708,24 @@ func (s *Service) AssignVehicle(companyID, driverID, vehicleID string) error {
 	var vehicle models.Vehicle
 	if err := s.db.Where("company_id = ? AND id = ?", companyID, vehicleID).First(&vehicle).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("vehicle not found")
+			return apperrors.NewNotFoundError("vehicle")
 		}
-		return fmt.Errorf("failed to validate vehicle: %w", err)
+		return apperrors.Wrap(err, "failed to validate vehicle")
 	}
 
 	// Check if vehicle is already assigned
 	if vehicle.DriverID != nil {
-		return errors.New("vehicle is already assigned to another driver")
+		return apperrors.NewConflictError("vehicle is already assigned to another driver")
 	}
 
 	// Update driver
 	if err := s.db.Model(&models.Driver{}).Where("company_id = ? AND id = ?", companyID, driverID).Update("vehicle_id", vehicleID).Error; err != nil {
-		return fmt.Errorf("failed to assign vehicle to driver: %w", err)
+		return apperrors.Wrap(err, "failed to assign vehicle to driver")
 	}
 
 	// Update vehicle
 	if err := s.db.Model(&models.Vehicle{}).Where("company_id = ? AND id = ?", companyID, vehicleID).Update("driver_id", driverID).Error; err != nil {
-		return fmt.Errorf("failed to assign driver to vehicle: %w", err)
+		return apperrors.Wrap(err, "failed to assign driver to vehicle")
 	}
 
 	// TODO: Add assignment history tracking
@@ -581,12 +738,12 @@ func (s *Service) AssignVehicle(companyID, driverID, vehicleID string) error {
 func (s *Service) UnassignVehicle(companyID, driverID string) error {
 	// Update driver
 	if err := s.db.Model(&models.Driver{}).Where("company_id = ? AND id = ?", companyID, driverID).Update("vehicle_id", nil).Error; err != nil {
-		return fmt.Errorf("failed to unassign vehicle from driver: %w", err)
+		return apperrors.Wrap(err, "failed to unassign vehicle from driver")
 	}
 
 	// Update vehicle
 	if err := s.db.Model(&models.Vehicle{}).Where("company_id = ? AND driver_id = ?", companyID, driverID).Update("driver_id", nil).Error; err != nil {
-		return fmt.Errorf("failed to unassign driver from vehicle: %w", err)
+		return apperrors.Wrap(err, "failed to unassign driver from vehicle")
 	}
 
 	// TODO: Add unassignment history tracking
@@ -603,9 +760,9 @@ func (s *Service) GetDriverVehicle(companyID, driverID string) (*models.Vehicle,
 		Where("drivers.company_id = ? AND drivers.id = ?", companyID, driverID).
 		First(&vehicle).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("no vehicle assigned to this driver")
+			return nil, apperrors.NewNotFoundError("vehicle assigned to this driver")
 		}
-		return nil, fmt.Errorf("failed to get driver vehicle: %w", err)
+		return nil, apperrors.Wrap(err, "failed to get driver vehicle")
 	}
 
 	return &vehicle, nil
@@ -621,7 +778,7 @@ func (s *Service) UpdateMedicalCheckup(companyID, driverID string, checkupDate t
 	driver.MedicalCheckupExpiry = &checkupDate
 
 	if err := s.db.Save(driver).Error; err != nil {
-		return fmt.Errorf("failed to update medical checkup: %w", err)
+		return apperrors.Wrap(err, "failed to update medical checkup")
 	}
 
 	return nil
@@ -638,7 +795,7 @@ func (s *Service) UpdateTrainingStatus(companyID, driverID string, completed boo
 	driver.NextTrainingDate = expiryDate
 
 	if err := s.db.Save(driver).Error; err != nil {
-		return fmt.Errorf("failed to update training status: %w", err)
+		return apperrors.Wrap(err, "failed to update training status")
 	}
 
 	return nil
@@ -683,7 +840,7 @@ func (s *Service) validateIndonesianCompliance(nik, simNumber string, dateOfBirt
 	// Validate age (must be at least 18)
 	age := time.Now().Year() - dateOfBirth.Year()
 	if age < 18 {
-		return errors.New("driver must be at least 18 years old")
+		return apperrors.NewValidationError("driver must be at least 18 years old")
 	}
 
 	return nil
@@ -698,7 +855,7 @@ func (s *Service) validateNIK(nik string) error {
 		return fmt.Errorf("failed to validate NIK: %w", err)
 	}
 	if !matched {
-		return errors.New("invalid NIK format, expected 16 digits")
+		return apperrors.NewValidationError("invalid NIK format, expected 16 digits")
 	}
 	return nil
 }
@@ -712,7 +869,7 @@ func (s *Service) validateSIMNumber(simNumber string) error {
 		return fmt.Errorf("failed to validate SIM number: %w", err)
 	}
 	if !matched {
-		return errors.New("invalid Indonesian SIM number format, expected 10-20 alphanumeric characters")
+		return apperrors.NewValidationError("invalid Indonesian SIM number format, expected 10-20 alphanumeric characters")
 	}
 	return nil
 }
@@ -723,19 +880,19 @@ func (s *Service) validateDriverAssignment(companyID, driverID string) error {
 	
 	if err := s.db.Where("company_id = ? AND id = ? AND is_active = ?", companyID, driverID, true).First(&driver).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("driver not found or inactive")
+			return apperrors.NewNotFoundError("driver or driver is inactive")
 		}
-		return fmt.Errorf("failed to validate driver: %w", err)
+		return apperrors.Wrap(err, "failed to validate driver")
 	}
 
 	// Check if driver can drive (includes license validation)
 	if !driver.CanDrive() {
-		return errors.New("driver license is expired or invalid, or driver is not available")
+		return apperrors.NewBadRequestError("driver license is expired or invalid, or driver is not available")
 	}
 
 	// Check if driver is already assigned to another vehicle
 	if driver.VehicleID != nil {
-		return errors.New("driver is already assigned to another vehicle")
+		return apperrors.NewConflictError("driver is already assigned to another vehicle")
 	}
 
 	return nil

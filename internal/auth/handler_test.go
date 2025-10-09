@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tobangado69/fleettracker-pro/backend/internal/common/database"
 	"github.com/tobangado69/fleettracker-pro/backend/internal/common/testutil"
 )
 
@@ -22,7 +23,8 @@ func TestHandler_Register(t *testing.T) {
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 
-	service := NewService(db, "test-jwt-secret")
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
+	service := NewService(db, redisClient, "test-jwt-secret")
 	handler := NewHandler(service)
 
 	router := setupTestRouter()
@@ -107,7 +109,8 @@ func TestHandler_Login(t *testing.T) {
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 
-	service := NewService(db, "test-jwt-secret")
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
+	service := NewService(db, redisClient, "test-jwt-secret")
 	handler := NewHandler(service)
 
 	router := setupTestRouter()
@@ -202,7 +205,8 @@ func TestHandler_GetProfile(t *testing.T) {
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 
-	service := NewService(db, "test-jwt-secret")
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
+	service := NewService(db, redisClient, "test-jwt-secret")
 	handler := NewHandler(service)
 
 	router := setupTestRouter()
@@ -272,7 +276,8 @@ func TestHandler_UpdateProfile(t *testing.T) {
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 
-	service := NewService(db, "test-jwt-secret")
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
+	service := NewService(db, redisClient, "test-jwt-secret")
 	handler := NewHandler(service)
 
 	router := setupTestRouter()

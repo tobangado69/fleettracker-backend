@@ -195,7 +195,7 @@ func (Geofence) TableName() string {
 }
 
 // BeforeCreate hook for GPSTrack
-func (g *GPSTrack) BeforeCreate(tx *gorm.DB) error {
+func (g *GPSTrack) BeforeCreate(_ *gorm.DB) error {
 	if g.Country == "" {
 		g.Country = "Indonesia"
 	}
@@ -204,7 +204,7 @@ func (g *GPSTrack) BeforeCreate(tx *gorm.DB) error {
 }
 
 // BeforeCreate hook for Trip
-func (t *Trip) BeforeCreate(tx *gorm.DB) error {
+func (t *Trip) BeforeCreate(_ *gorm.DB) error {
 	if t.Status == "" {
 		t.Status = "planned"
 	}
@@ -212,7 +212,7 @@ func (t *Trip) BeforeCreate(tx *gorm.DB) error {
 }
 
 // BeforeCreate hook for Geofence
-func (gf *Geofence) BeforeCreate(tx *gorm.DB) error {
+func (gf *Geofence) BeforeCreate(_ *gorm.DB) error {
 	if gf.Type == "" {
 		gf.Type = "circle"
 	}
@@ -385,14 +385,14 @@ func (gf *Geofence) isPointInCircle(lat, lon float64) bool {
 }
 
 // isPointInPolygon checks if point is inside polygon geofence
-func (gf *Geofence) isPointInPolygon(lat, lon float64) bool {
+func (gf *Geofence) isPointInPolygon(_ float64, _ float64) bool {
 	// Implementation for polygon checking
 	// This would require parsing the polygon data from JSON
 	return false // Placeholder
 }
 
 // isPointInRectangle checks if point is inside rectangle geofence
-func (gf *Geofence) isPointInRectangle(lat, lon float64) bool {
+func (gf *Geofence) isPointInRectangle(_ float64, _ float64) bool {
 	// Implementation for rectangle checking
 	// This would require parsing rectangle bounds from polygon data
 	return false // Placeholder

@@ -1,12 +1,15 @@
 package auth
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/golang-jwt/jwt/v5"
 	"gorm.io/gorm"
 
@@ -17,7 +20,103 @@ import (
 // Service handles authentication operations
 type Service struct {
 	db        *gorm.DB
+	redis     *redis.Client
 	jwtSecret []byte
+	cache     *CacheService
+}
+
+// CacheService provides caching functionality for auth operations
+type CacheService struct {
+	redis *redis.Client
+}
+
+// NewCacheService creates a new cache service
+func NewCacheService(redis *redis.Client) *CacheService {
+	return &CacheService{redis: redis}
+}
+
+// GetUserFromCache retrieves a user from cache
+func (cs *CacheService) GetUserFromCache(ctx context.Context, userID string) (*models.User, error) {
+	key := fmt.Sprintf("user:%s", userID)
+	
+	var user models.User
+	data, err := cs.redis.Get(ctx, key).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, nil // Cache miss
+		}
+		return nil, fmt.Errorf("failed to get user from cache: %w", err)
+	}
+	
+	if err := json.Unmarshal([]byte(data), &user); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal user from cache: %w", err)
+	}
+	
+	return &user, nil
+}
+
+// SetUserInCache stores a user in cache
+func (cs *CacheService) SetUserInCache(ctx context.Context, user *models.User, expiration time.Duration) error {
+	key := fmt.Sprintf("user:%s", user.ID)
+	
+	data, err := json.Marshal(user)
+	if err != nil {
+		return fmt.Errorf("failed to marshal user for cache: %w", err)
+	}
+	
+	if err := cs.redis.Set(ctx, key, data, expiration).Err(); err != nil {
+		return fmt.Errorf("failed to set user in cache: %w", err)
+	}
+	
+	return nil
+}
+
+// InvalidateUserCache removes a user from cache
+func (cs *CacheService) InvalidateUserCache(ctx context.Context, userID string) error {
+	key := fmt.Sprintf("user:%s", userID)
+	
+	if err := cs.redis.Del(ctx, key).Err(); err != nil {
+		return fmt.Errorf("failed to invalidate user cache: %w", err)
+	}
+	
+	return nil
+}
+
+// SetSessionInCache stores a user session in cache
+func (cs *CacheService) SetSessionInCache(ctx context.Context, sessionID string, userID string, expiration time.Duration) error {
+	key := fmt.Sprintf("session:%s", sessionID)
+	
+	if err := cs.redis.Set(ctx, key, userID, expiration).Err(); err != nil {
+		return fmt.Errorf("failed to set session in cache: %w", err)
+	}
+	
+	return nil
+}
+
+// GetSessionFromCache retrieves a user session from cache
+func (cs *CacheService) GetSessionFromCache(ctx context.Context, sessionID string) (string, error) {
+	key := fmt.Sprintf("session:%s", sessionID)
+	
+	userID, err := cs.redis.Get(ctx, key).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return "", nil // Cache miss
+		}
+		return "", fmt.Errorf("failed to get session from cache: %w", err)
+	}
+	
+	return userID, nil
+}
+
+// InvalidateSessionCache removes a session from cache
+func (cs *CacheService) InvalidateSessionCache(ctx context.Context, sessionID string) error {
+	key := fmt.Sprintf("session:%s", sessionID)
+	
+	if err := cs.redis.Del(ctx, key).Err(); err != nil {
+		return fmt.Errorf("failed to invalidate session cache: %w", err)
+	}
+	
+	return nil
 }
 
 // Claims represents JWT claims
@@ -72,10 +171,12 @@ type UserResponse struct {
 }
 
 // NewService creates a new authentication service
-func NewService(db *gorm.DB, jwtSecret string) *Service {
+func NewService(db *gorm.DB, redis *redis.Client, jwtSecret string) *Service {
 	return &Service{
 		db:        db,
+		redis:     redis,
 		jwtSecret: []byte(jwtSecret),
+		cache:     NewCacheService(redis),
 	}
 }
 

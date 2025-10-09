@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tobangado69/fleettracker-pro/backend/internal/common/database"
 	"github.com/tobangado69/fleettracker-pro/backend/internal/common/testutil"
 )
 
@@ -17,7 +18,8 @@ func TestService_Register(t *testing.T) {
 	company := testutil.NewTestCompany()
 	require.NoError(t, db.Create(company).Error)
 
-	service := NewService(db, "test-jwt-secret")
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
+	service := NewService(db, redisClient, "test-jwt-secret")
 
 	tests := []struct {
 		name    string
@@ -112,7 +114,8 @@ func TestService_Login(t *testing.T) {
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 
-	service := NewService(db, "test-jwt-secret")
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
+	service := NewService(db, redisClient, "test-jwt-secret")
 
 	// Create test company and user
 	company := testutil.NewTestCompany()
@@ -206,7 +209,8 @@ func TestService_TokenGeneration(t *testing.T) {
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 
-	service := NewService(db, "test-jwt-secret")
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
+	service := NewService(db, redisClient, "test-jwt-secret")
 
 	// Create test company and user
 	company := testutil.NewTestCompany()
@@ -257,7 +261,8 @@ func TestService_PasswordHashing(t *testing.T) {
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 
-	service := NewService(db, "test-jwt-secret")
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
+	service := NewService(db, redisClient, "test-jwt-secret")
 
 	t.Run("password is hashed correctly", func(t *testing.T) {
 		password := "SecurePass123!"
@@ -319,7 +324,8 @@ func TestService_TokenExpiry(t *testing.T) {
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 
-	service := NewService(db, "test-jwt-secret")
+	redisClient, _ := database.ConnectRedis("redis://localhost:6379")
+	service := NewService(db, redisClient, "test-jwt-secret")
 
 	company := testutil.NewTestCompany()
 	require.NoError(t, db.Create(company).Error)

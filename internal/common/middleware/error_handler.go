@@ -96,7 +96,7 @@ func RecoveryHandler() gin.HandlerFunc {
 
 // AbortWithError is a helper to abort request with AppError.
 func AbortWithError(c *gin.Context, err *errors.AppError) {
-	_ = c.Error(err)
+	c.Error(err)
 	c.Abort()
 }
 

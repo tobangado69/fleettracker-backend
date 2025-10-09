@@ -1,12 +1,17 @@
 package tracking
 
 import (
+	std_errors "errors" // Alias standard errors to avoid conflict
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"gorm.io/gorm"
+
+	"github.com/tobangado69/fleettracker-pro/backend/internal/common/middleware"
+	apperrors "github.com/tobangado69/fleettracker-pro/backend/pkg/errors"
 	"github.com/tobangado69/fleettracker-pro/backend/pkg/models"
 )
 
@@ -24,17 +29,18 @@ func NewHandler(service *Service) *Handler {
 	}
 }
 
-// ErrorResponse represents an error response
-type ErrorResponse struct {
-	Error   string `json:"error"`
-	Message string `json:"message"`
-}
-
 // SuccessResponse represents a success response
 type SuccessResponse struct {
 	Success bool        `json:"success"`
 	Data    interface{} `json:"data"`
 	Message string      `json:"message,omitempty"`
+}
+
+// ErrorResponse represents an error response
+type ErrorResponse struct {
+	Success bool   `json:"success" example:"false"`
+	Error   string `json:"error"`
+	Message string `json:"message,omitempty"`
 }
 
 // PaginatedResponse represents a paginated response
@@ -70,29 +76,24 @@ type Meta struct {
 func (h *Handler) ProcessGPSData(c *gin.Context) {
 	var req GPSDataRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, "invalid request data")
 		return
 	}
 
 	// Validate request
 	if err := h.validator.Struct(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "validation_error",
-			Message: err.Error(),
-		})
+		middleware.AbortWithValidation(c, err.Error())
 		return
 	}
 
 	// Process GPS data
 	gpsTrack, err := h.service.ProcessGPSData(req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "processing_failed",
-			Message: err.Error(),
-		})
+		if appErr, ok := err.(*apperrors.AppError); ok {
+			middleware.AbortWithError(c, appErr)
+		} else {
+			middleware.AbortWithInternal(c, "failed to process GPS data", err)
+		}
 		return
 	}
 
@@ -119,40 +120,36 @@ func (h *Handler) ProcessGPSData(c *gin.Context) {
 func (h *Handler) GetCurrentLocation(c *gin.Context) {
 	vehicleID := c.Param("id")
 	if vehicleID == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: "vehicle ID is required",
-		})
+		middleware.AbortWithBadRequest(c, "vehicle ID is required")
 		return
 	}
 
 	// Get company ID from JWT claims for authorization
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
 	// Verify vehicle belongs to company
 	var vehicle models.Vehicle
 	if err := h.service.db.Where("id = ? AND company_id = ?", vehicleID, companyID).First(&vehicle).Error; err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error:   "not_found",
-			Message: "vehicle not found",
-		})
+		if std_errors.Is(err, gorm.ErrRecordNotFound) {
+			middleware.AbortWithNotFound(c, "vehicle")
+		} else {
+			middleware.AbortWithInternal(c, "failed to verify vehicle", err)
+		}
 		return
 	}
 
 	// Get current location
 	location, err := h.service.GetCurrentLocation(vehicleID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error:   "not_found",
-			Message: err.Error(),
-		})
+		if appErr, ok := err.(*apperrors.AppError); ok {
+			middleware.AbortWithError(c, appErr)
+		} else {
+			middleware.AbortWithInternal(c, "failed to get current location", err)
+		}
 		return
 	}
 
@@ -186,30 +183,25 @@ func (h *Handler) GetCurrentLocation(c *gin.Context) {
 func (h *Handler) GetLocationHistory(c *gin.Context) {
 	vehicleID := c.Param("id")
 	if vehicleID == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: "vehicle ID is required",
-		})
+		middleware.AbortWithBadRequest(c, "vehicle ID is required")
 		return
 	}
 
 	// Get company ID from JWT claims for authorization
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
 	// Verify vehicle belongs to company
 	var vehicle models.Vehicle
 	if err := h.service.db.Where("id = ? AND company_id = ?", vehicleID, companyID).First(&vehicle).Error; err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error:   "not_found",
-			Message: "vehicle not found",
-		})
+		if std_errors.Is(err, gorm.ErrRecordNotFound) {
+			middleware.AbortWithNotFound(c, "vehicle")
+		} else {
+			middleware.AbortWithInternal(c, "failed to verify vehicle", err)
+		}
 		return
 	}
 
@@ -264,10 +256,11 @@ func (h *Handler) GetLocationHistory(c *gin.Context) {
 	// Get location history
 	gpsTracks, total, err := h.service.GetLocationHistory(vehicleID, filters)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error:   "internal_error",
-			Message: err.Error(),
-		})
+		if appErr, ok := err.(*apperrors.AppError); ok {
+			middleware.AbortWithError(c, appErr)
+		} else {
+			middleware.AbortWithInternal(c, "failed to get location history", err)
+		}
 		return
 	}
 
@@ -307,30 +300,25 @@ func (h *Handler) GetLocationHistory(c *gin.Context) {
 func (h *Handler) GetRoute(c *gin.Context) {
 	vehicleID := c.Param("id")
 	if vehicleID == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: "vehicle ID is required",
-		})
+		middleware.AbortWithBadRequest(c, "vehicle ID is required")
 		return
 	}
 
 	// Get company ID from JWT claims for authorization
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
 	// Verify vehicle belongs to company
 	var vehicle models.Vehicle
 	if err := h.service.db.Where("id = ? AND company_id = ?", vehicleID, companyID).First(&vehicle).Error; err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error:   "not_found",
-			Message: "vehicle not found",
-		})
+		if std_errors.Is(err, gorm.ErrRecordNotFound) {
+			middleware.AbortWithNotFound(c, "vehicle")
+		} else {
+			middleware.AbortWithInternal(c, "failed to verify vehicle", err)
+		}
 		return
 	}
 
@@ -340,10 +328,7 @@ func (h *Handler) GetRoute(c *gin.Context) {
 		var err error
 		startTime, err = time.Parse(time.RFC3339, startTimeStr)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error:   "invalid_request",
-				Message: "invalid start_time format",
-			})
+			middleware.AbortWithBadRequest(c, "invalid start_time format")
 			return
 		}
 	} else {
@@ -354,10 +339,7 @@ func (h *Handler) GetRoute(c *gin.Context) {
 		var err error
 		endTime, err = time.Parse(time.RFC3339, endTimeStr)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error:   "invalid_request",
-				Message: "invalid end_time format",
-			})
+			middleware.AbortWithBadRequest(c, "invalid end_time format")
 			return
 		}
 	} else {
@@ -376,10 +358,11 @@ func (h *Handler) GetRoute(c *gin.Context) {
 
 	gpsTracks, _, err := h.service.GetLocationHistory(vehicleID, filters)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error:   "internal_error",
-			Message: err.Error(),
-		})
+		if appErr, ok := err.(*apperrors.AppError); ok {
+			middleware.AbortWithError(c, appErr)
+		} else {
+			middleware.AbortWithInternal(c, "failed to get location history for route", err)
+		}
 		return
 	}
 
@@ -475,29 +458,24 @@ func (h *Handler) calculateRouteMetrics(gpsTracks []models.GPSTrack) map[string]
 func (h *Handler) ProcessDriverEvent(c *gin.Context) {
 	var req DriverEventRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, "invalid request data")
 		return
 	}
 
 	// Validate request
 	if err := h.validator.Struct(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "validation_error",
-			Message: err.Error(),
-		})
+		middleware.AbortWithValidation(c, err.Error())
 		return
 	}
 
 	// Process driver event
 	event, err := h.service.ProcessDriverEvent(req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "processing_failed",
-			Message: err.Error(),
-		})
+		if appErr, ok := err.(*apperrors.AppError); ok {
+			middleware.AbortWithError(c, appErr)
+		} else {
+			middleware.AbortWithInternal(c, "failed to process driver event", err)
+		}
 		return
 	}
 
@@ -531,10 +509,7 @@ func (h *Handler) GetDriverEvents(c *gin.Context) {
 	// Get company ID from JWT claims for authorization
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
@@ -582,10 +557,7 @@ func (h *Handler) GetDriverEvents(c *gin.Context) {
 	// Get total count
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error:   "internal_error",
-			Message: err.Error(),
-		})
+		middleware.AbortWithInternal(c, "failed to count driver events", err)
 		return
 	}
 
@@ -593,10 +565,7 @@ func (h *Handler) GetDriverEvents(c *gin.Context) {
 	var events []models.DriverEvent
 	offset := (page - 1) * limit
 	if err := query.Order("timestamp DESC").Offset(offset).Limit(limit).Find(&events).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error:   "internal_error",
-			Message: err.Error(),
-		})
+		middleware.AbortWithInternal(c, "failed to get driver events", err)
 		return
 	}
 
@@ -635,39 +604,31 @@ func (h *Handler) GetDriverEvents(c *gin.Context) {
 func (h *Handler) StartTrip(c *gin.Context) {
 	var req TripRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, "invalid request data")
 		return
 	}
 
 	// Validate request
 	if err := h.validator.Struct(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "validation_error",
-			Message: err.Error(),
-		})
+		middleware.AbortWithValidation(c, err.Error())
 		return
 	}
 
 	// Get company ID from JWT claims for authorization
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
 	// Verify vehicle belongs to company
 	var vehicle models.Vehicle
 	if err := h.service.db.Where("id = ? AND company_id = ?", req.VehicleID, companyID).First(&vehicle).Error; err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error:   "not_found",
-			Message: "vehicle not found",
-		})
+		if std_errors.Is(err, gorm.ErrRecordNotFound) {
+			middleware.AbortWithNotFound(c, "vehicle")
+		} else {
+			middleware.AbortWithInternal(c, "failed to verify vehicle", err)
+		}
 		return
 	}
 
@@ -675,23 +636,22 @@ func (h *Handler) StartTrip(c *gin.Context) {
 	var trip *models.Trip
 	var err error
 
-	if req.Action == "start" {
+	switch req.Action {
+	case "start":
 		trip, err = h.service.StartTrip(req)
-	} else if req.Action == "end" {
+	case "end":
 		trip, err = h.service.EndTrip(req)
-	} else {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_action",
-			Message: "action must be 'start' or 'end'",
-		})
+	default:
+		middleware.AbortWithBadRequest(c, "action must be 'start' or 'end'")
 		return
 	}
 
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "trip_failed",
-			Message: err.Error(),
-		})
+		if appErr, ok := err.(*apperrors.AppError); ok {
+			middleware.AbortWithError(c, appErr)
+		} else {
+			middleware.AbortWithInternal(c, "trip operation failed", err)
+		}
 		return
 	}
 
@@ -724,10 +684,7 @@ func (h *Handler) GetTrips(c *gin.Context) {
 	// Get company ID from JWT claims for authorization
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
@@ -772,10 +729,7 @@ func (h *Handler) GetTrips(c *gin.Context) {
 	// Get total count
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error:   "internal_error",
-			Message: err.Error(),
-		})
+		middleware.AbortWithInternal(c, "failed to count trips", err)
 		return
 	}
 
@@ -783,10 +737,7 @@ func (h *Handler) GetTrips(c *gin.Context) {
 	var trips []models.Trip
 	offset := (page - 1) * limit
 	if err := query.Order("trips.start_time DESC").Offset(offset).Limit(limit).Find(&trips).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error:   "internal_error",
-			Message: err.Error(),
-		})
+		middleware.AbortWithInternal(c, "failed to get trips", err)
 		return
 	}
 
@@ -825,29 +776,20 @@ func (h *Handler) GetTrips(c *gin.Context) {
 func (h *Handler) CreateGeofence(c *gin.Context) {
 	var req GeofenceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, "invalid request data")
 		return
 	}
 
 	// Validate request
 	if err := h.validator.Struct(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "validation_error",
-			Message: err.Error(),
-		})
+		middleware.AbortWithValidation(c, err.Error())
 		return
 	}
 
 	// Get company ID from JWT claims
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
@@ -857,10 +799,11 @@ func (h *Handler) CreateGeofence(c *gin.Context) {
 	// Create geofence
 	geofence, err := h.service.CreateGeofence(req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "creation_failed",
-			Message: err.Error(),
-		})
+		if appErr, ok := err.(*apperrors.AppError); ok {
+			middleware.AbortWithError(c, appErr)
+		} else {
+			middleware.AbortWithInternal(c, "failed to create geofence", err)
+		}
 		return
 	}
 
@@ -888,10 +831,7 @@ func (h *Handler) GetGeofences(c *gin.Context) {
 	// Get company ID from JWT claims
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
@@ -910,10 +850,7 @@ func (h *Handler) GetGeofences(c *gin.Context) {
 	// Get geofences
 	var geofences []models.Geofence
 	if err := query.Order("created_at DESC").Find(&geofences).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error:   "internal_error",
-			Message: err.Error(),
-		})
+		middleware.AbortWithInternal(c, "failed to get geofences", err)
 		return
 	}
 
@@ -941,39 +878,31 @@ func (h *Handler) GetGeofences(c *gin.Context) {
 func (h *Handler) UpdateGeofence(c *gin.Context) {
 	geofenceID := c.Param("id")
 	if geofenceID == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: "geofence ID is required",
-		})
+		middleware.AbortWithBadRequest(c, "geofence ID is required")
 		return
 	}
 
 	var req GeofenceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, "invalid request data")
 		return
 	}
 
 	// Get company ID from JWT claims
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
 	// Verify geofence belongs to company
 	var geofence models.Geofence
 	if err := h.service.db.Where("id = ? AND company_id = ?", geofenceID, companyID).First(&geofence).Error; err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error:   "not_found",
-			Message: "geofence not found",
-		})
+		if std_errors.Is(err, gorm.ErrRecordNotFound) {
+			middleware.AbortWithNotFound(c, "geofence")
+		} else {
+			middleware.AbortWithInternal(c, "failed to verify geofence", err)
+		}
 		return
 	}
 
@@ -1002,10 +931,7 @@ func (h *Handler) UpdateGeofence(c *gin.Context) {
 
 	// Save changes
 	if err := h.service.db.Save(&geofence).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error:   "update_failed",
-			Message: err.Error(),
-		})
+		middleware.AbortWithInternal(c, "failed to update geofence", err)
 		return
 	}
 
@@ -1032,38 +958,26 @@ func (h *Handler) UpdateGeofence(c *gin.Context) {
 func (h *Handler) DeleteGeofence(c *gin.Context) {
 	geofenceID := c.Param("id")
 	if geofenceID == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_request",
-			Message: "geofence ID is required",
-		})
+		middleware.AbortWithBadRequest(c, "geofence ID is required")
 		return
 	}
 
 	// Get company ID from JWT claims
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
 	// Verify geofence belongs to company and delete
 	result := h.service.db.Where("id = ? AND company_id = ?", geofenceID, companyID).Delete(&models.Geofence{})
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error:   "delete_failed",
-			Message: result.Error.Error(),
-		})
+		middleware.AbortWithInternal(c, "failed to delete geofence", result.Error)
 		return
 	}
 
 	if result.RowsAffected == 0 {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error:   "not_found",
-			Message: "geofence not found",
-		})
+		middleware.AbortWithNotFound(c, "geofence")
 		return
 	}
 
@@ -1101,10 +1015,7 @@ func (h *Handler) GetDashboardStats(c *gin.Context) {
 	// Get company ID from JWT claims
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
@@ -1140,10 +1051,7 @@ func (h *Handler) GetFuelConsumption(c *gin.Context) {
 	// Get company ID from JWT claims
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
@@ -1177,10 +1085,7 @@ func (h *Handler) GetDriverPerformance(c *gin.Context) {
 	// Get company ID from JWT claims
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
@@ -1214,10 +1119,7 @@ func (h *Handler) GenerateReport(c *gin.Context) {
 	// Get company ID from JWT claims
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 
@@ -1249,10 +1151,7 @@ func (h *Handler) GetComplianceReport(c *gin.Context) {
 	// Get company ID from JWT claims
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "company ID not found in token",
-		})
+		middleware.AbortWithUnauthorized(c, "company ID not found in token")
 		return
 	}
 

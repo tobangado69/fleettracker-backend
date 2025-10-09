@@ -2,6 +2,8 @@ package analytics
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -11,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/tobangado69/fleettracker-pro/backend/internal/common/repository"
+	apperrors "github.com/tobangado69/fleettracker-pro/backend/pkg/errors"
 	"github.com/tobangado69/fleettracker-pro/backend/pkg/models"
 )
 
@@ -19,6 +22,201 @@ type Service struct {
 	db          *gorm.DB
 	redis       *redis.Client
 	repoManager *repository.RepositoryManager
+	cache       *CacheService
+}
+
+// CacheService provides caching functionality for analytics operations
+type CacheService struct {
+	redis *redis.Client
+}
+
+// NewCacheService creates a new cache service
+func NewCacheService(redis *redis.Client) *CacheService {
+	return &CacheService{redis: redis}
+}
+
+// GetFleetDashboardFromCache retrieves fleet dashboard data from cache
+func (cs *CacheService) GetFleetDashboardFromCache(ctx context.Context, companyID string) (*FleetDashboard, error) {
+	key := fmt.Sprintf("analytics:dashboard:%s", companyID)
+	
+	var dashboard FleetDashboard
+	data, err := cs.redis.Get(ctx, key).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, nil // Cache miss
+		}
+		return nil, fmt.Errorf("failed to get fleet dashboard from cache: %w", err)
+	}
+	
+	if err := json.Unmarshal([]byte(data), &dashboard); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal fleet dashboard from cache: %w", err)
+	}
+	
+	return &dashboard, nil
+}
+
+// SetFleetDashboardInCache stores fleet dashboard data in cache
+func (cs *CacheService) SetFleetDashboardInCache(ctx context.Context, companyID string, dashboard *FleetDashboard, expiration time.Duration) error {
+	key := fmt.Sprintf("analytics:dashboard:%s", companyID)
+	
+	data, err := json.Marshal(dashboard)
+	if err != nil {
+		return fmt.Errorf("failed to marshal fleet dashboard for cache: %w", err)
+	}
+	
+	if err := cs.redis.Set(ctx, key, data, expiration).Err(); err != nil {
+		return fmt.Errorf("failed to set fleet dashboard in cache: %w", err)
+	}
+	
+	return nil
+}
+
+// GetFuelAnalyticsFromCache retrieves fuel analytics data from cache
+func (cs *CacheService) GetFuelAnalyticsFromCache(ctx context.Context, companyID string, startDate, endDate time.Time) (*FuelAnalytics, error) {
+	cacheKey := cs.generateFuelAnalyticsCacheKey(companyID, startDate, endDate)
+	
+	var analytics FuelAnalytics
+	data, err := cs.redis.Get(ctx, cacheKey).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, nil // Cache miss
+		}
+		return nil, fmt.Errorf("failed to get fuel analytics from cache: %w", err)
+	}
+	
+	if err := json.Unmarshal([]byte(data), &analytics); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal fuel analytics from cache: %w", err)
+	}
+	
+	return &analytics, nil
+}
+
+// SetFuelAnalyticsInCache stores fuel analytics data in cache
+func (cs *CacheService) SetFuelAnalyticsInCache(ctx context.Context, companyID string, startDate, endDate time.Time, analytics *FuelAnalytics, expiration time.Duration) error {
+	cacheKey := cs.generateFuelAnalyticsCacheKey(companyID, startDate, endDate)
+	
+	data, err := json.Marshal(analytics)
+	if err != nil {
+		return fmt.Errorf("failed to marshal fuel analytics for cache: %w", err)
+	}
+	
+	if err := cs.redis.Set(ctx, cacheKey, data, expiration).Err(); err != nil {
+		return fmt.Errorf("failed to set fuel analytics in cache: %w", err)
+	}
+	
+	return nil
+}
+
+// GetDriverPerformanceFromCache retrieves driver performance data from cache
+func (cs *CacheService) GetDriverPerformanceFromCache(ctx context.Context, companyID, driverID, period string) (*DriverPerformance, error) {
+	cacheKey := cs.generateDriverPerformanceCacheKey(companyID, driverID, period)
+	
+	var performance DriverPerformance
+	data, err := cs.redis.Get(ctx, cacheKey).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, nil // Cache miss
+		}
+		return nil, fmt.Errorf("failed to get driver performance from cache: %w", err)
+	}
+	
+	if err := json.Unmarshal([]byte(data), &performance); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal driver performance from cache: %w", err)
+	}
+	
+	return &performance, nil
+}
+
+// SetDriverPerformanceInCache stores driver performance data in cache
+func (cs *CacheService) SetDriverPerformanceInCache(ctx context.Context, companyID, driverID, period string, performance *DriverPerformance, expiration time.Duration) error {
+	cacheKey := cs.generateDriverPerformanceCacheKey(companyID, driverID, period)
+	
+	data, err := json.Marshal(performance)
+	if err != nil {
+		return fmt.Errorf("failed to marshal driver performance for cache: %w", err)
+	}
+	
+	if err := cs.redis.Set(ctx, cacheKey, data, expiration).Err(); err != nil {
+		return fmt.Errorf("failed to set driver performance in cache: %w", err)
+	}
+	
+	return nil
+}
+
+// GetComplianceReportFromCache retrieves compliance report data from cache
+func (cs *CacheService) GetComplianceReportFromCache(ctx context.Context, companyID, period string) (*ComplianceReport, error) {
+	cacheKey := cs.generateComplianceReportCacheKey(companyID, period)
+	
+	var report ComplianceReport
+	data, err := cs.redis.Get(ctx, cacheKey).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, nil // Cache miss
+		}
+		return nil, fmt.Errorf("failed to get compliance report from cache: %w", err)
+	}
+	
+	if err := json.Unmarshal([]byte(data), &report); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal compliance report from cache: %w", err)
+	}
+	
+	return &report, nil
+}
+
+// SetComplianceReportInCache stores compliance report data in cache
+func (cs *CacheService) SetComplianceReportInCache(ctx context.Context, companyID, period string, report *ComplianceReport, expiration time.Duration) error {
+	cacheKey := cs.generateComplianceReportCacheKey(companyID, period)
+	
+	data, err := json.Marshal(report)
+	if err != nil {
+		return fmt.Errorf("failed to marshal compliance report for cache: %w", err)
+	}
+	
+	if err := cs.redis.Set(ctx, cacheKey, data, expiration).Err(); err != nil {
+		return fmt.Errorf("failed to set compliance report in cache: %w", err)
+	}
+	
+	return nil
+}
+
+// InvalidateAnalyticsCache removes analytics cache for a company
+func (cs *CacheService) InvalidateAnalyticsCache(ctx context.Context, companyID string) error {
+	patterns := []string{
+		fmt.Sprintf("analytics:dashboard:%s", companyID),
+		fmt.Sprintf("analytics:fuel:%s:*", companyID),
+		fmt.Sprintf("analytics:driver:%s:*", companyID),
+		fmt.Sprintf("analytics:compliance:%s:*", companyID),
+	}
+	
+	for _, pattern := range patterns {
+		keys, err := cs.redis.Keys(ctx, pattern).Result()
+		if err != nil {
+			return fmt.Errorf("failed to get analytics cache keys for pattern %s: %w", pattern, err)
+		}
+		
+		if len(keys) > 0 {
+			if err := cs.redis.Del(ctx, keys...).Err(); err != nil {
+				return fmt.Errorf("failed to invalidate analytics cache for pattern %s: %w", pattern, err)
+			}
+		}
+	}
+	
+	return nil
+}
+
+// generateFuelAnalyticsCacheKey creates a cache key for fuel analytics queries
+func (cs *CacheService) generateFuelAnalyticsCacheKey(companyID string, startDate, endDate time.Time) string {
+	return fmt.Sprintf("analytics:fuel:%s:%s:%s", companyID, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+}
+
+// generateDriverPerformanceCacheKey creates a cache key for driver performance queries
+func (cs *CacheService) generateDriverPerformanceCacheKey(companyID, driverID, period string) string {
+	return fmt.Sprintf("analytics:driver:%s:%s:%s", companyID, driverID, period)
+}
+
+// generateComplianceReportCacheKey creates a cache key for compliance report queries
+func (cs *CacheService) generateComplianceReportCacheKey(companyID, period string) string {
+	return fmt.Sprintf("analytics:compliance:%s:%s", companyID, period)
 }
 
 // NewService creates a new analytics service
@@ -27,6 +225,7 @@ func NewService(db *gorm.DB, redis *redis.Client, repoManager *repository.Reposi
 		db:          db,
 		redis:       redis,
 		repoManager: repoManager,
+		cache:       NewCacheService(redis),
 	}
 }
 
@@ -154,6 +353,17 @@ type RegulatoryCompliance struct {
 
 // GetFuelConsumption calculates fuel consumption analytics
 func (s *Service) GetFuelConsumption(ctx context.Context, companyID string, startDate, endDate time.Time) (*FuelAnalytics, error) {
+	// Try to get from cache first
+	cachedAnalytics, err := s.cache.GetFuelAnalyticsFromCache(ctx, companyID, startDate, endDate)
+	if err != nil {
+		// Log cache error but continue with database lookup
+		fmt.Printf("Cache error for fuel analytics %s: %v\n", companyID, err)
+	}
+	
+	if cachedAnalytics != nil {
+		return cachedAnalytics, nil
+	}
+
 	// Get GPS tracks for the date range
 	filters := repository.FilterOptions{
 		CompanyID: companyID,
@@ -167,7 +377,7 @@ func (s *Service) GetFuelConsumption(ctx context.Context, companyID string, star
 
 	gpsTracks, err := s.repoManager.GetGPSTracks().List(ctx, filters, repository.Pagination{Page: 1, PageSize: 10000})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get GPS tracks: %w", err)
+		return nil, apperrors.Wrap(err, "failed to get GPS tracks")
 	}
 
 	// Calculate fuel consumption metrics
@@ -212,7 +422,7 @@ func (s *Service) GetFuelConsumption(ctx context.Context, companyID string, star
 	// Generate optimization tips
 	optimizationTips := s.generateFuelOptimizationTips(fuelEfficiency, totalFuel)
 
-	return &FuelAnalytics{
+	analytics := &FuelAnalytics{
 		TotalConsumed:     totalFuel,
 		AverageEfficiency: fuelEfficiency,
 		CostSavings:       s.calculateCostSavings(fuelEfficiency),
@@ -221,15 +431,37 @@ func (s *Service) GetFuelConsumption(ctx context.Context, companyID string, star
 		Trends:           trends,
 		TheftAlerts:      theftAlerts,
 		OptimizationTips: optimizationTips,
-	}, nil
+	}
+
+	// Cache the result for 30 minutes (fuel analytics don't change frequently)
+	if err := s.cache.SetFuelAnalyticsInCache(ctx, companyID, startDate, endDate, analytics, 30*time.Minute); err != nil {
+		// Log cache error but don't fail the request
+		fmt.Printf("Failed to cache fuel analytics %s: %v\n", companyID, err)
+	}
+
+	return analytics, nil
 }
 
 // GetDriverPerformance calculates driver performance analytics
 func (s *Service) GetDriverPerformance(ctx context.Context, companyID string, driverID string, period string) (*DriverPerformance, error) {
+	// Try to get from cache first
+	cachedPerformance, err := s.cache.GetDriverPerformanceFromCache(ctx, companyID, driverID, period)
+	if err != nil {
+		// Log cache error but continue with database lookup
+		fmt.Printf("Cache error for driver performance %s: %v\n", driverID, err)
+	}
+	
+	if cachedPerformance != nil {
+		return cachedPerformance, nil
+	}
+
 	// Get driver information
 	driver, err := s.repoManager.GetDrivers().GetByID(ctx, driverID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get driver: %w", err)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFoundError("driver")
+		}
+		return nil, apperrors.Wrap(err, "failed to get driver")
 	}
 
 	// Get GPS tracks for the driver
@@ -242,7 +474,7 @@ func (s *Service) GetDriverPerformance(ctx context.Context, companyID string, dr
 
 	gpsTracks, err := s.repoManager.GetGPSTracks().List(ctx, filters, repository.Pagination{Page: 1, PageSize: 10000})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get GPS tracks: %w", err)
+		return nil, apperrors.Wrap(err, "failed to get GPS tracks")
 	}
 
 	// Calculate behavior metrics
@@ -260,7 +492,7 @@ func (s *Service) GetDriverPerformance(ctx context.Context, companyID string, dr
 	// Generate trends
 	trends := s.generateDriverTrends(gpsTracks)
 
-	return &DriverPerformance{
+	performance := &DriverPerformance{
 		DriverID:         driverID,
 		DriverName:       driver.FirstName + " " + driver.LastName,
 		Score:           score,
@@ -268,11 +500,30 @@ func (s *Service) GetDriverPerformance(ctx context.Context, companyID string, dr
 		Trends:          trends,
 		Recommendations: recommendations,
 		ImprovementAreas: improvementAreas,
-	}, nil
+	}
+
+	// Cache the result for 20 minutes (driver performance changes moderately)
+	if err := s.cache.SetDriverPerformanceInCache(ctx, companyID, driverID, period, performance, 20*time.Minute); err != nil {
+		// Log cache error but don't fail the request
+		fmt.Printf("Failed to cache driver performance %s: %v\n", driverID, err)
+	}
+
+	return performance, nil
 }
 
 // GetFleetDashboard generates fleet operations dashboard data
 func (s *Service) GetFleetDashboard(ctx context.Context, companyID string) (*FleetDashboard, error) {
+	// Try to get from cache first
+	cachedDashboard, err := s.cache.GetFleetDashboardFromCache(ctx, companyID)
+	if err != nil {
+		// Log cache error but continue with database lookup
+		fmt.Printf("Cache error for fleet dashboard %s: %v\n", companyID, err)
+	}
+	
+	if cachedDashboard != nil {
+		return cachedDashboard, nil
+	}
+
 	// Get active vehicles
 	vehicleFilters := repository.FilterOptions{
 		CompanyID: companyID,
@@ -282,7 +533,7 @@ func (s *Service) GetFleetDashboard(ctx context.Context, companyID string) (*Fle
 	}
 	vehicles, err := s.repoManager.GetVehicles().List(ctx, vehicleFilters, repository.Pagination{Page: 1, PageSize: 1000})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get vehicles: %w", err)
+		return nil, apperrors.Wrap(err, "failed to get vehicles")
 	}
 
 	// Get recent trips
@@ -291,7 +542,7 @@ func (s *Service) GetFleetDashboard(ctx context.Context, companyID string) (*Fle
 	}
 	trips, err := s.repoManager.GetTrips().List(ctx, tripFilters, repository.Pagination{Page: 1, PageSize: 1000})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get trips: %w", err)
+		return nil, apperrors.Wrap(err, "failed to get trips")
 	}
 
 	// Calculate metrics
@@ -329,7 +580,7 @@ func (s *Service) GetFleetDashboard(ctx context.Context, companyID string) (*Fle
 	// Get top performers
 	topPerformers := s.getTopPerformers(ctx, companyID)
 
-	return &FleetDashboard{
+	dashboard := &FleetDashboard{
 		ActiveVehicles:      activeVehicles,
 		TotalTrips:         totalTrips,
 		DistanceTraveled:   distanceTraveled,
@@ -340,11 +591,30 @@ func (s *Service) GetFleetDashboard(ctx context.Context, companyID string) (*Fle
 		CostPerKm:          costPerKm,
 		MaintenanceAlerts:  maintenanceAlerts,
 		TopPerformers:      topPerformers,
-	}, nil
+	}
+
+	// Cache the result for 10 minutes (dashboard data changes frequently)
+	if err := s.cache.SetFleetDashboardInCache(ctx, companyID, dashboard, 10*time.Minute); err != nil {
+		// Log cache error but don't fail the request
+		fmt.Printf("Failed to cache fleet dashboard %s: %v\n", companyID, err)
+	}
+
+	return dashboard, nil
 }
 
 // GetComplianceReport generates Indonesian compliance report
 func (s *Service) GetComplianceReport(ctx context.Context, companyID string, period string) (*ComplianceReport, error) {
+	// Try to get from cache first
+	cachedReport, err := s.cache.GetComplianceReportFromCache(ctx, companyID, period)
+	if err != nil {
+		// Log cache error but continue with database lookup
+		fmt.Printf("Cache error for compliance report %s: %v\n", companyID, err)
+	}
+	
+	if cachedReport != nil {
+		return cachedReport, nil
+	}
+
 	// Get driver hours
 	driverHours := s.calculateDriverHours(ctx, companyID, period)
 
@@ -357,14 +627,22 @@ func (s *Service) GetComplianceReport(ctx context.Context, companyID string, per
 	// Check regulatory compliance
 	regulatoryCompliance := s.checkRegulatoryCompliance(driverHours, vehicleInspections, taxReport)
 
-	return &ComplianceReport{
+	report := &ComplianceReport{
 		CompanyID:           companyID,
 		ReportPeriod:        period,
 		DriverHours:         driverHours,
 		VehicleInspections:  vehicleInspections,
 		TaxReport:           taxReport,
 		RegulatoryCompliance: regulatoryCompliance,
-	}, nil
+	}
+
+	// Cache the result for 1 hour (compliance reports don't change frequently)
+	if err := s.cache.SetComplianceReportInCache(ctx, companyID, period, report, 1*time.Hour); err != nil {
+		// Log cache error but don't fail the request
+		fmt.Printf("Failed to cache compliance report %s: %v\n", companyID, err)
+	}
+
+	return report, nil
 }
 
 // Helper methods
@@ -593,7 +871,7 @@ func (s *Service) generateDriverTrends(gpsTracks []*models.GPSTrack) []Trend {
 	return trends
 }
 
-func (s *Service) getMaintenanceAlerts(ctx context.Context, companyID string) []MaintenanceAlert {
+func (s *Service) getMaintenanceAlerts(_ context.Context, _ string) []MaintenanceAlert {
 	// Simplified maintenance alerts
 	// In real implementation, this would check actual maintenance schedules
 	alerts := []MaintenanceAlert{
@@ -609,7 +887,7 @@ func (s *Service) getMaintenanceAlerts(ctx context.Context, companyID string) []
 	return alerts
 }
 
-func (s *Service) getTopPerformers(ctx context.Context, companyID string) []DriverPerformance {
+func (s *Service) getTopPerformers(_ context.Context, _ string) []DriverPerformance {
 	// Simplified top performers
 	// In real implementation, this would query actual driver performance data
 	performers := []DriverPerformance{
@@ -627,7 +905,7 @@ func (s *Service) getTopPerformers(ctx context.Context, companyID string) []Driv
 	return performers
 }
 
-func (s *Service) calculateDriverHours(ctx context.Context, companyID string, period string) []DriverHours {
+func (s *Service) calculateDriverHours(_ context.Context, _ string, _ string) []DriverHours {
 	// Simplified driver hours calculation
 	// In real implementation, this would calculate actual working hours
 	hours := []DriverHours{
@@ -642,7 +920,7 @@ func (s *Service) calculateDriverHours(ctx context.Context, companyID string, pe
 	return hours
 }
 
-func (s *Service) getVehicleInspections(ctx context.Context, companyID string) []VehicleInspection {
+func (s *Service) getVehicleInspections(_ context.Context, _ string) []VehicleInspection {
 	// Simplified vehicle inspections
 	// In real implementation, this would check actual inspection records
 	inspections := []VehicleInspection{
@@ -658,7 +936,7 @@ func (s *Service) getVehicleInspections(ctx context.Context, companyID string) [
 	return inspections
 }
 
-func (s *Service) generateTaxReport(ctx context.Context, companyID string, period string) TaxReport {
+func (s *Service) generateTaxReport(_ context.Context, _ string, period string) TaxReport {
 	// Simplified tax report
 	// In real implementation, this would calculate actual revenue and taxes
 	totalRevenue := 100000000.0 // 100M IDR
@@ -673,7 +951,7 @@ func (s *Service) generateTaxReport(ctx context.Context, companyID string, perio
 	}
 }
 
-func (s *Service) checkRegulatoryCompliance(driverHours []DriverHours, vehicleInspections []VehicleInspection, taxReport TaxReport) RegulatoryCompliance {
+func (s *Service) checkRegulatoryCompliance(_ []DriverHours, _ []VehicleInspection, taxReport TaxReport) RegulatoryCompliance {
 	// Simplified compliance check
 	// In real implementation, this would check actual compliance status
 	return RegulatoryCompliance{

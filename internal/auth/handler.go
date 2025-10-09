@@ -2,8 +2,11 @@ package auth
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tobangado69/fleettracker-pro/backend/internal/common/middleware"
+	"github.com/tobangado69/fleettracker-pro/backend/internal/common/validators"
 )
 
 // SuccessResponse represents a success response
@@ -15,15 +18,16 @@ type SuccessResponse struct {
 
 // ErrorResponse represents an error response
 type ErrorResponse struct {
-	Error   string `json:"error" example:"Bad Request"`
-	Message string `json:"message" example:"Invalid request data"`
+	Success bool   `json:"success" example:"false"`
+	Error   string `json:"error" example:"Bad request"`
+	Message string `json:"message,omitempty" example:"Invalid input"`
 }
 
-// ValidationErrorResponse represents a validation error response
+// ValidationErrorResponse represents validation error response
 type ValidationErrorResponse struct {
-	Error   string                 `json:"error" example:"Validation Error"`
-	Message string                 `json:"message" example:"Request validation failed"`
-	Details map[string]interface{} `json:"details,omitempty"`
+	Success bool                   `json:"success" example:"false"`
+	Error   string                 `json:"error" example:"Validation failed"`
+	Errors  map[string]interface{} `json:"errors,omitempty"`
 }
 
 // RefreshTokenRequest represents refresh token request
@@ -60,34 +64,79 @@ func NewHandler(service *Service) *Handler {
 	}
 }
 
-// Register handles user registration
+// Register handles user registration (RESTRICTED: First user/company owner only)
 // @Summary Register new user
-// @Description Register a new user account with Indonesian compliance validation
+// @Description Register a new company owner account (restricted to first user only). For additional users, contact your company administrator.
 // @Tags auth
 // @Accept json
 // @Produce json
 // @Param request body RegisterRequest true "User registration data"
 // @Success 201 {object} SuccessResponse{data=UserResponse}
 // @Failure 400 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse "Registration closed - contact your admin"
 // @Failure 422 {object} ValidationErrorResponse
 // @Router /api/v1/auth/register [post]
 func (h *Handler) Register(c *gin.Context) {
 	var req RegisterRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid request",
-			"message": err.Error(),
+		middleware.AbortWithBadRequest(c, err.Error())
+		return
+	}
+
+	// SECURITY: Check if this is the first user in the system
+	isFirst, err := h.service.IsFirstUser()
+	if err != nil {
+		middleware.AbortWithInternal(c, "Failed to check user count", err)
+		return
+	}
+
+	if !isFirst {
+		// Public registration is closed - users must be created by admins
+		c.JSON(http.StatusForbidden, ErrorResponse{
+			Success: false,
+			Error:   "Public registration is closed",
+			Message: "This is a SaaS platform with controlled access. New users must be created by your company administrator. If you need access, please contact your company owner or administrator.",
 		})
 		return
 	}
 
+	// Validate email
+	if err := validators.ValidateEmail(req.Email); err != nil {
+		middleware.AbortWithBadRequest(c, "Invalid email: "+err.Error())
+		return
+	}
+
+	// Validate username
+	if err := validators.ValidateUsername(req.Username); err != nil {
+		middleware.AbortWithBadRequest(c, "Invalid username: "+err.Error())
+		return
+	}
+
+	// Validate password
+	if err := validators.ValidatePassword(req.Password); err != nil {
+		middleware.AbortWithBadRequest(c, "Invalid password: "+err.Error())
+		return
+	}
+
+	// Validate phone if provided
+	if req.Phone != "" {
+		phoneClean := validators.CleanPhoneNumber(req.Phone)
+		if err := validators.ValidatePhoneNumber(phoneClean); err != nil {
+			middleware.AbortWithBadRequest(c, "Invalid phone: "+err.Error())
+			return
+		}
+		req.Phone = validators.FormatPhoneNumber(phoneClean)
+	}
+
+	// Sanitize text inputs
+	sanitizer := validators.NewSanitizer()
+	req.FirstName = sanitizer.SanitizeUserInput(req.FirstName, 100)
+	req.LastName = sanitizer.SanitizeUserInput(req.LastName, 100)
+
 	user, err := h.service.Register(req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Registration failed",
-			"message": err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -112,19 +161,22 @@ func (h *Handler) Login(c *gin.Context) {
 	var req LoginRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid request",
-			"message": err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
+	// Validate email format
+	if err := validators.ValidateEmail(req.Email); err != nil {
+		middleware.AbortWithBadRequest(c, "Invalid email: "+err.Error())
+		return
+	}
+
+	// Sanitize email (trim, lowercase)
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+
 	user, tokens, err := h.service.Login(req)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":   "Login failed",
-			"message": err.Error(),
-		})
+		middleware.AbortWithUnauthorized(c, err.Error())
 		return
 	}
 
@@ -152,19 +204,13 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid request",
-			"message": err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
 	tokens, err := h.service.RefreshToken(req.RefreshToken)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":   "Token refresh failed",
-			"message": err.Error(),
-		})
+		middleware.AbortWithUnauthorized(c, err.Error())
 		return
 	}
 
@@ -189,10 +235,7 @@ func (h *Handler) Logout(c *gin.Context) {
 	// Get access token from Authorization header
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Authorization header required",
-			"message": "Access token not provided",
-		})
+		middleware.AbortWithBadRequest(c, "Access token not provided")
 		return
 	}
 
@@ -204,10 +247,7 @@ func (h *Handler) Logout(c *gin.Context) {
 
 	err := h.service.Logout(tokenString)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Logout failed",
-			"message": err.Error(),
-		})
+		middleware.AbortWithInternal(c, err.Error(), err)
 		return
 	}
 
@@ -230,19 +270,13 @@ func (h *Handler) GetProfile(c *gin.Context) {
 	// Get user ID from JWT claims (set by middleware)
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":   "Unauthorized",
-			"message": "User ID not found in context",
-		})
+		middleware.AbortWithUnauthorized(c, "User ID not found in context")
 		return
 	}
 
 	user, err := h.service.GetProfile(userID.(string))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error":   "Profile not found",
-			"message": err.Error(),
-		})
+		middleware.AbortWithNotFound(c, err.Error())
 		return
 	}
 
@@ -267,28 +301,19 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 	// Get user ID from JWT claims (set by middleware)
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":   "Unauthorized",
-			"message": "User ID not found in context",
-		})
+		middleware.AbortWithUnauthorized(c, "User ID not found in context")
 		return
 	}
 
 	var updates map[string]interface{}
 	if err := c.ShouldBindJSON(&updates); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid request",
-			"message": err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
 	user, err := h.service.UpdateProfile(userID.(string), updates)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Profile update failed",
-			"message": err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -314,10 +339,7 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 	// Get user ID from JWT claims (set by middleware)
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":   "Unauthorized",
-			"message": "User ID not found in context",
-		})
+		middleware.AbortWithUnauthorized(c, "User ID not found in context")
 		return
 	}
 
@@ -327,19 +349,19 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid request",
-			"message": err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
+		return
+	}
+
+	// Validate new password
+	if err := validators.ValidatePassword(req.NewPassword); err != nil {
+		middleware.AbortWithBadRequest(c, "Invalid new password: "+err.Error())
 		return
 	}
 
 	err := h.service.ChangePassword(userID.(string), req.CurrentPassword, req.NewPassword)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Password change failed",
-			"message": err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -365,19 +387,20 @@ func (h *Handler) ForgotPassword(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid request",
-			"message": err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
+		return
+	}
+
+	// Validate and sanitize email
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	if err := validators.ValidateEmail(req.Email); err != nil {
+		middleware.AbortWithBadRequest(c, "Invalid email: "+err.Error())
 		return
 	}
 
 	err := h.service.ForgotPassword(req.Email)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Password reset failed",
-			"message": err.Error(),
-		})
+		middleware.AbortWithInternal(c, err.Error(), err)
 		return
 	}
 
@@ -403,19 +426,19 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid request",
-			"message": err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
+		return
+	}
+
+	// Validate new password
+	if err := validators.ValidatePassword(req.NewPassword); err != nil {
+		middleware.AbortWithBadRequest(c, "Invalid password: "+err.Error())
 		return
 	}
 
 	err := h.service.ResetPassword(req.Token, req.NewPassword)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Password reset failed",
-			"message": err.Error(),
-		})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -425,17 +448,75 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 }
 
 // GetActiveSessions handles getting user's active sessions
+// @Summary Get active sessions
+// @Description Get all active sessions for the current user
+// @Tags auth
+// @Produce json
+// @Success 200 {object} SuccessResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/auth/sessions [get]
+// @Security BearerAuth
 func (h *Handler) GetActiveSessions(c *gin.Context) {
-	// TODO: Implement get active sessions
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Get active sessions not implemented yet",
+	// Get user ID from context
+	userID, exists := c.Get("user_id")
+	if !exists {
+		middleware.AbortWithUnauthorized(c, "User ID not found")
+		return
+	}
+
+	// Get current token from header
+	token := c.GetHeader("Authorization")
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	sessions, appErr := h.service.GetActiveSessions(c.Request.Context(), userID.(string), token)
+	if appErr != nil {
+		middleware.AbortWithError(c, appErr)
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    sessions,
 	})
 }
 
 // RevokeSession handles revoking a specific session
+// @Summary Revoke session
+// @Description Revoke a specific session by ID
+// @Tags auth
+// @Produce json
+// @Param id path string true "Session ID"
+// @Success 200 {object} SuccessResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/auth/sessions/{id} [delete]
+// @Security BearerAuth
 func (h *Handler) RevokeSession(c *gin.Context) {
-	// TODO: Implement revoke session
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Revoke session not implemented yet",
+	// Get user ID from context
+	userID, exists := c.Get("user_id")
+	if !exists {
+		middleware.AbortWithUnauthorized(c, "User ID not found")
+		return
+	}
+
+	sessionID := c.Param("id")
+	if sessionID == "" {
+		middleware.AbortWithBadRequest(c, "Session ID is required")
+		return
+	}
+
+	appErr := h.service.RevokeSession(c.Request.Context(), userID.(string), sessionID)
+	if appErr != nil {
+		middleware.AbortWithError(c, appErr)
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Session revoked successfully",
 	})
 }
