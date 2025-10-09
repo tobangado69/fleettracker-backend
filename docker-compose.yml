@@ -7,12 +7,12 @@ services:
       POSTGRES_DB: fleettracker
       POSTGRES_USER: fleettracker
       POSTGRES_PASSWORD: password123
-      POSTGRES_HOST_AUTH_METHOD: trust
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./init-auth.sh:/docker-entrypoint-initdb.d/02-init-auth.sh
     networks:
       - fleettracker-network
     healthcheck:
@@ -29,7 +29,6 @@ services:
       POSTGRES_DB: fleettracker_timeseries
       POSTGRES_USER: fleettracker
       POSTGRES_PASSWORD: password123
-      POSTGRES_HOST_AUTH_METHOD: trust
     ports:
       - "5433:5432"
     volumes:
@@ -120,6 +119,25 @@ services:
       - fleettracker-network
     depends_on:
       - redis
+
+  # Test runner service (use: docker-compose run --rm test)
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    environment:
+      DATABASE_URL: postgres://fleettracker:password123@postgres:5432/fleettracker?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: test-jwt-secret
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - fleettracker-network
+    profiles:
+      - test
 
 volumes:
   postgres_data:

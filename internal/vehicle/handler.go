@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 	"github.com/tobangado69/fleettracker-pro/backend/internal/common/middleware"
+	customValidators "github.com/tobangado69/fleettracker-pro/backend/internal/common/validators"
 )
 
 // Handler handles vehicle HTTP requests
@@ -30,6 +31,13 @@ type SuccessResponse struct {
 	Success bool        `json:"success"`
 	Data    interface{} `json:"data"`
 	Message string      `json:"message,omitempty"`
+}
+
+// ErrorResponse represents an error response
+type ErrorResponse struct {
+	Success bool   `json:"success" example:"false"`
+	Error   string `json:"error"`
+	Message string `json:"message,omitempty"`
 }
 
 // PaginatedResponse represents a paginated response
@@ -81,6 +89,40 @@ func (h *Handler) CreateVehicle(c *gin.Context) {
 		middleware.AbortWithValidation(c, err.Error())
 		return
 	}
+
+	// Validate and format license plate
+	if req.LicensePlate != "" {
+		if err := customValidators.ValidatePlateNumber(req.LicensePlate); err != nil {
+			middleware.AbortWithBadRequest(c, "Invalid license plate: "+err.Error())
+			return
+		}
+		req.LicensePlate = customValidators.FormatPlateNumber(req.LicensePlate)
+	}
+
+	// Validate VIN
+	if req.VIN != "" {
+		if err := customValidators.ValidateVIN(req.VIN); err != nil {
+			middleware.AbortWithBadRequest(c, "Invalid VIN: "+err.Error())
+			return
+		}
+	}
+
+	// Validate year
+	if req.Year != 0 {
+		if err := customValidators.ValidateVehicleYear(req.Year); err != nil {
+			middleware.AbortWithBadRequest(c, err.Error())
+			return
+		}
+	}
+
+	// Validate fuel type
+	if req.FuelType != "" {
+		if err := customValidators.ValidateFuelType(req.FuelType); err != nil {
+			middleware.AbortWithBadRequest(c, err.Error())
+			return
+		}
+	}
+
 
 	// Create vehicle
 	vehicle, err := h.service.CreateVehicle(companyID.(string), req)
@@ -179,6 +221,24 @@ func (h *Handler) UpdateVehicle(c *gin.Context) {
 	if err := h.validator.Struct(&req); err != nil {
 		middleware.AbortWithValidation(c, err.Error())
 		return
+	}
+
+	// Validate license plate if provided
+	if req.LicensePlate != nil && *req.LicensePlate != "" {
+		if err := customValidators.ValidatePlateNumber(*req.LicensePlate); err != nil {
+			middleware.AbortWithBadRequest(c, "Invalid license plate: "+err.Error())
+			return
+		}
+		formatted := customValidators.FormatPlateNumber(*req.LicensePlate)
+		req.LicensePlate = &formatted
+	}
+
+	// Validate fuel type if provided
+	if req.FuelType != nil && *req.FuelType != "" {
+		if err := customValidators.ValidateFuelType(*req.FuelType); err != nil {
+			middleware.AbortWithBadRequest(c, err.Error())
+			return
+		}
 	}
 
 	// Update vehicle

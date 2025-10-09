@@ -1,13 +1,13 @@
 basePath: /api/v1
 definitions:
-  internal_analytics.ErrorResponse:
+  analytics.ErrorResponse:
     properties:
       error:
         type: string
       message:
         type: string
     type: object
-  internal_analytics.SuccessResponse:
+  analytics.SuccessResponse:
     properties:
       data: {}
       message:
@@ -15,7 +15,7 @@ definitions:
       success:
         type: boolean
     type: object
-  internal_auth.ChangePasswordRequest:
+  auth.ChangePasswordRequest:
     properties:
       current_password:
         example: oldPassword123
@@ -28,16 +28,51 @@ definitions:
     - current_password
     - new_password
     type: object
-  internal_auth.ErrorResponse:
+  auth.ChangeRoleRequest:
+    properties:
+      new_role:
+        type: string
+    required:
+    - new_role
+    type: object
+  auth.CreateUserRequest:
+    properties:
+      company_id:
+        description: For super-admin creating users in other companies
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      last_name:
+        type: string
+      password:
+        minLength: 8
+        type: string
+      phone:
+        type: string
+      role:
+        type: string
+    required:
+    - email
+    - first_name
+    - last_name
+    - password
+    - role
+    type: object
+  auth.ErrorResponse:
     properties:
       error:
-        example: Bad Request
+        example: Bad request
         type: string
       message:
-        example: Invalid request data
+        example: Invalid input
         type: string
+      success:
+        example: false
+        type: boolean
     type: object
-  internal_auth.ForgotPasswordRequest:
+  auth.ForgotPasswordRequest:
     properties:
       email:
         example: user@example.com
@@ -45,7 +80,7 @@ definitions:
     required:
     - email
     type: object
-  internal_auth.LoginRequest:
+  auth.LoginRequest:
     properties:
       email:
         type: string
@@ -55,7 +90,7 @@ definitions:
     - email
     - password
     type: object
-  internal_auth.RefreshTokenRequest:
+  auth.RefreshTokenRequest:
     properties:
       refresh_token:
         example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
@@ -63,7 +98,7 @@ definitions:
     required:
     - refresh_token
     type: object
-  internal_auth.RegisterRequest:
+  auth.RegisterRequest:
     properties:
       company_id:
         type: string
@@ -93,7 +128,7 @@ definitions:
     - password
     - username
     type: object
-  internal_auth.ResetPasswordRequest:
+  auth.ResetPasswordRequest:
     properties:
       new_password:
         example: newPassword123
@@ -106,7 +141,7 @@ definitions:
     - new_password
     - token
     type: object
-  internal_auth.SuccessResponse:
+  auth.SuccessResponse:
     properties:
       data: {}
       message:
@@ -116,7 +151,7 @@ definitions:
         example: true
         type: boolean
     type: object
-  internal_auth.TokenResponse:
+  auth.TokenResponse:
     properties:
       access_token:
         type: string
@@ -127,7 +162,18 @@ definitions:
       token_type:
         type: string
     type: object
-  internal_auth.UserResponse:
+  auth.UpdateUserRequest:
+    properties:
+      email:
+        type: string
+      first_name:
+        type: string
+      last_name:
+        type: string
+      phone:
+        type: string
+    type: object
+  auth.UserResponse:
     properties:
       company_id:
         type: string
@@ -154,19 +200,19 @@ definitions:
       username:
         type: string
     type: object
-  internal_auth.ValidationErrorResponse:
+  auth.ValidationErrorResponse:
     properties:
-      details:
+      error:
+        example: Validation failed
+        type: string
+      errors:
         additionalProperties: true
         type: object
-      error:
-        example: Validation Error
-        type: string
-      message:
-        example: Request validation failed
-        type: string
+      success:
+        example: false
+        type: boolean
     type: object
-  internal_driver.CreateDriverRequest:
+  driver.CreateDriverRequest:
     properties:
       address:
         maxLength: 255
@@ -226,14 +272,17 @@ definitions:
     - province
     - sim_number
     type: object
-  internal_driver.ErrorResponse:
+  driver.ErrorResponse:
     properties:
       error:
         type: string
       message:
         type: string
+      success:
+        example: false
+        type: boolean
     type: object
-  internal_driver.Meta:
+  driver.Meta:
     properties:
       has_next:
         type: boolean
@@ -248,15 +297,15 @@ definitions:
       total_pages:
         type: integer
     type: object
-  internal_driver.PaginatedResponse:
+  driver.PaginatedResponse:
     properties:
       data: {}
       meta:
-        $ref: '#/definitions/internal_driver.Meta'
+        $ref: '#/definitions/driver.Meta'
       success:
         type: boolean
     type: object
-  internal_driver.SuccessResponse:
+  driver.SuccessResponse:
     properties:
       data: {}
       message:
@@ -264,7 +313,7 @@ definitions:
       success:
         type: boolean
     type: object
-  internal_driver.UpdateDriverRequest:
+  driver.UpdateDriverRequest:
     properties:
       address:
         maxLength: 255
@@ -341,7 +390,90 @@ definitions:
       training_expiry:
         type: string
     type: object
-  internal_payment.ErrorResponse:
+  health.Dependency:
+    properties:
+      error:
+        type: string
+      latency_ms:
+        type: integer
+      message:
+        type: string
+      status:
+        $ref: '#/definitions/health.Status'
+    type: object
+  health.HealthResponse:
+    properties:
+      dependencies:
+        additionalProperties:
+          $ref: '#/definitions/health.Dependency'
+        type: object
+      errors:
+        items:
+          type: string
+        type: array
+      service:
+        type: string
+      status:
+        $ref: '#/definitions/health.Status'
+      system:
+        $ref: '#/definitions/health.SystemMetrics'
+      timestamp:
+        type: string
+      uptime:
+        type: string
+      version:
+        type: string
+    type: object
+  health.MemoryMetrics:
+    properties:
+      alloc_mb:
+        type: integer
+      num_gc:
+        type: integer
+      sys_mb:
+        type: integer
+      total_alloc_mb:
+        type: integer
+    type: object
+  health.MetricsResponse:
+    properties:
+      cpu_count:
+        type: integer
+      goroutines:
+        type: integer
+      memory:
+        $ref: '#/definitions/health.MemoryMetrics'
+      service:
+        type: string
+      timestamp:
+        type: string
+      uptime:
+        type: string
+      version:
+        type: string
+    type: object
+  health.Status:
+    enum:
+    - healthy
+    - unhealthy
+    - degraded
+    type: string
+    x-enum-varnames:
+    - StatusHealthy
+    - StatusUnhealthy
+    - StatusDegraded
+  health.SystemMetrics:
+    properties:
+      cpu_count:
+        type: integer
+      goroutine_count:
+        type: integer
+      memory_alloc_mb:
+        type: integer
+      memory_usage_mb:
+        type: integer
+    type: object
+  payment.ErrorResponse:
     properties:
       details:
         example: Validation failed
@@ -353,7 +485,7 @@ definitions:
         example: Invalid request data
         type: string
     type: object
-  internal_payment.InvoiceRequest:
+  payment.InvoiceRequest:
     properties:
       billing_period:
         type: string
@@ -369,7 +501,7 @@ definitions:
     - billing_period
     - company_id
     type: object
-  internal_payment.InvoiceResponse:
+  payment.InvoiceResponse:
     properties:
       due_date:
         type: string
@@ -381,7 +513,7 @@ definitions:
         description: Base64 encoded PDF
         type: string
       payment_instructions:
-        $ref: '#/definitions/internal_payment.PaymentInstructions'
+        $ref: '#/definitions/payment.PaymentInstructions'
       subtotal:
         type: number
       tax_amount:
@@ -389,7 +521,7 @@ definitions:
       total_amount:
         type: number
     type: object
-  internal_payment.PaymentConfirmationRequest:
+  payment.PaymentConfirmationRequest:
     properties:
       bank_account:
         type: string
@@ -409,7 +541,7 @@ definitions:
     - transfer_amount
     - transfer_date
     type: object
-  internal_payment.PaymentInstructions:
+  payment.PaymentInstructions:
     properties:
       account_holder:
         type: string
@@ -424,7 +556,7 @@ definitions:
       transfer_note:
         type: string
     type: object
-  internal_payment.SubscriptionBillingRequest:
+  payment.SubscriptionBillingRequest:
     properties:
       billing_cycle:
         description: monthly, yearly
@@ -444,7 +576,7 @@ definitions:
     - start_date
     - subscription_id
     type: object
-  internal_payment.SuccessResponse:
+  payment.SuccessResponse:
     properties:
       data: {}
       message:
@@ -454,7 +586,7 @@ definitions:
         example: true
         type: boolean
     type: object
-  internal_tracking.DriverEventRequest:
+  tracking.DriverEventRequest:
     properties:
       details:
         type: string
@@ -498,14 +630,17 @@ definitions:
     - timestamp
     - vehicle_id
     type: object
-  internal_tracking.ErrorResponse:
+  tracking.ErrorResponse:
     properties:
       error:
         type: string
       message:
         type: string
+      success:
+        example: false
+        type: boolean
     type: object
-  internal_tracking.GPSDataRequest:
+  tracking.GPSDataRequest:
     properties:
       accuracy:
         description: meters
@@ -553,7 +688,7 @@ definitions:
     - timestamp
     - vehicle_id
     type: object
-  internal_tracking.GeofenceRequest:
+  tracking.GeofenceRequest:
     properties:
       alert_on_entry:
         type: boolean
@@ -595,7 +730,7 @@ definitions:
     - radius
     - type
     type: object
-  internal_tracking.Location:
+  tracking.Location:
     properties:
       address:
         type: string
@@ -604,7 +739,7 @@ definitions:
       longitude:
         type: number
     type: object
-  internal_tracking.Meta:
+  tracking.Meta:
     properties:
       has_next:
         type: boolean
@@ -619,15 +754,15 @@ definitions:
       total_pages:
         type: integer
     type: object
-  internal_tracking.PaginatedResponse:
+  tracking.PaginatedResponse:
     properties:
       data: {}
       meta:
-        $ref: '#/definitions/internal_tracking.Meta'
+        $ref: '#/definitions/tracking.Meta'
       success:
         type: boolean
     type: object
-  internal_tracking.SuccessResponse:
+  tracking.SuccessResponse:
     properties:
       data: {}
       message:
@@ -635,7 +770,7 @@ definitions:
       success:
         type: boolean
     type: object
-  internal_tracking.TripRequest:
+  tracking.TripRequest:
     properties:
       action:
         enum:
@@ -645,13 +780,13 @@ definitions:
       driver_id:
         type: string
       end_location:
-        $ref: '#/definitions/internal_tracking.Location'
+        $ref: '#/definitions/tracking.Location'
       odometer_end:
         type: number
       odometer_start:
         type: number
       start_location:
-        $ref: '#/definitions/internal_tracking.Location'
+        $ref: '#/definitions/tracking.Location'
       timestamp:
         type: string
       vehicle_id:
@@ -662,7 +797,7 @@ definitions:
     - timestamp
     - vehicle_id
     type: object
-  internal_vehicle.CreateVehicleRequest:
+  vehicle.CreateVehicleRequest:
     properties:
       bpkb_number:
         maxLength: 20
@@ -727,14 +862,17 @@ definitions:
     - vin
     - year
     type: object
-  internal_vehicle.ErrorResponse:
+  vehicle.ErrorResponse:
     properties:
       error:
         type: string
       message:
         type: string
+      success:
+        example: false
+        type: boolean
     type: object
-  internal_vehicle.Meta:
+  vehicle.Meta:
     properties:
       has_next:
         type: boolean
@@ -749,15 +887,15 @@ definitions:
       total_pages:
         type: integer
     type: object
-  internal_vehicle.PaginatedResponse:
+  vehicle.PaginatedResponse:
     properties:
       data: {}
       meta:
-        $ref: '#/definitions/internal_vehicle.Meta'
+        $ref: '#/definitions/vehicle.Meta'
       success:
         type: boolean
     type: object
-  internal_vehicle.SuccessResponse:
+  vehicle.SuccessResponse:
     properties:
       data: {}
       message:
@@ -765,7 +903,7 @@ definitions:
       success:
         type: boolean
     type: object
-  internal_vehicle.UpdateVehicleRequest:
+  vehicle.UpdateVehicleRequest:
     properties:
       bpkb_number:
         maxLength: 20
@@ -854,11 +992,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_analytics.SuccessResponse'
+            $ref: '#/definitions/analytics.SuccessResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_analytics.ErrorResponse'
+            $ref: '#/definitions/analytics.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get fleet operations dashboard
@@ -873,11 +1011,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_analytics.SuccessResponse'
+            $ref: '#/definitions/analytics.SuccessResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_analytics.ErrorResponse'
+            $ref: '#/definitions/analytics.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get real-time dashboard updates
@@ -897,11 +1035,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_analytics.SuccessResponse'
+            $ref: '#/definitions/analytics.SuccessResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_analytics.ErrorResponse'
+            $ref: '#/definitions/analytics.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get driver behavior analysis
@@ -909,7 +1047,7 @@ paths:
       - analytics
   /api/v1/analytics/drivers/performance:
     get:
-      description: Get driver performance analytics and scoring
+      description: Get comprehensive driver performance analytics
       parameters:
       - description: Driver ID
         in: query
@@ -925,11 +1063,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_analytics.SuccessResponse'
+            $ref: '#/definitions/analytics.SuccessResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_analytics.ErrorResponse'
+            $ref: '#/definitions/analytics.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get driver performance analytics
@@ -949,11 +1087,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_analytics.SuccessResponse'
+            $ref: '#/definitions/analytics.SuccessResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_analytics.ErrorResponse'
+            $ref: '#/definitions/analytics.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get driver ranking
@@ -973,11 +1111,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_analytics.SuccessResponse'
+            $ref: '#/definitions/analytics.SuccessResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_analytics.ErrorResponse'
+            $ref: '#/definitions/analytics.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get driver training recommendations
@@ -992,11 +1130,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_analytics.SuccessResponse'
+            $ref: '#/definitions/analytics.SuccessResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_analytics.ErrorResponse'
+            $ref: '#/definitions/analytics.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get fleet cost analysis
@@ -1011,11 +1149,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_analytics.SuccessResponse'
+            $ref: '#/definitions/analytics.SuccessResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_analytics.ErrorResponse'
+            $ref: '#/definitions/analytics.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get maintenance insights
@@ -1023,21 +1161,21 @@ paths:
       - analytics
   /api/v1/analytics/fleet/utilization:
     get:
-      description: Get fleet utilization rates and efficiency metrics
+      description: Get fleet utilization metrics and statistics
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_analytics.SuccessResponse'
+            $ref: '#/definitions/analytics.SuccessResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_analytics.ErrorResponse'
+            $ref: '#/definitions/analytics.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Get fleet utilization analytics
+      summary: Get fleet utilization metrics
       tags:
       - analytics
   /api/v1/analytics/fuel/consumption:
@@ -1058,11 +1196,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_analytics.SuccessResponse'
+            $ref: '#/definitions/analytics.SuccessResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_analytics.ErrorResponse'
+            $ref: '#/definitions/analytics.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get fuel consumption analytics
@@ -1086,11 +1224,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_analytics.SuccessResponse'
+            $ref: '#/definitions/analytics.SuccessResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_analytics.ErrorResponse'
+            $ref: '#/definitions/analytics.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get fuel efficiency metrics
@@ -1114,11 +1252,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_analytics.SuccessResponse'
+            $ref: '#/definitions/analytics.SuccessResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_analytics.ErrorResponse'
+            $ref: '#/definitions/analytics.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get fuel optimization recommendations
@@ -1142,11 +1280,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_analytics.SuccessResponse'
+            $ref: '#/definitions/analytics.SuccessResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_analytics.ErrorResponse'
+            $ref: '#/definitions/analytics.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get fuel theft alerts
@@ -1166,11 +1304,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_analytics.SuccessResponse'
+            $ref: '#/definitions/analytics.SuccessResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_analytics.ErrorResponse'
+            $ref: '#/definitions/analytics.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get compliance report
@@ -1195,11 +1333,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_analytics.SuccessResponse'
+            $ref: '#/definitions/analytics.SuccessResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_analytics.ErrorResponse'
+            $ref: '#/definitions/analytics.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Export analytics report
@@ -1207,7 +1345,7 @@ paths:
       - analytics
   /api/v1/analytics/reports/generate:
     post:
-      description: Generate comprehensive analytics report in various formats
+      description: Generate various analytics reports
       parameters:
       - description: Report type (fuel, driver, fleet, compliance)
         in: query
@@ -1223,11 +1361,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_analytics.SuccessResponse'
+            $ref: '#/definitions/analytics.SuccessResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_analytics.ErrorResponse'
+            $ref: '#/definitions/analytics.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Generate analytics report
@@ -1244,22 +1382,22 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_auth.ChangePasswordRequest'
+          $ref: '#/definitions/auth.ChangePasswordRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_auth.SuccessResponse'
+            $ref: '#/definitions/auth.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_auth.ErrorResponse'
+            $ref: '#/definitions/auth.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_auth.ErrorResponse'
+            $ref: '#/definitions/auth.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Change user password
@@ -1276,22 +1414,22 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_auth.ForgotPasswordRequest'
+          $ref: '#/definitions/auth.ForgotPasswordRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_auth.SuccessResponse'
+            $ref: '#/definitions/auth.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_auth.ErrorResponse'
+            $ref: '#/definitions/auth.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_auth.ErrorResponse'
+            $ref: '#/definitions/auth.ErrorResponse'
       summary: Request password reset
       tags:
       - auth
@@ -1306,7 +1444,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_auth.LoginRequest'
+          $ref: '#/definitions/auth.LoginRequest'
       produces:
       - application/json
       responses:
@@ -1314,19 +1452,19 @@ paths:
           description: OK
           schema:
             allOf:
-            - $ref: '#/definitions/internal_auth.SuccessResponse'
+            - $ref: '#/definitions/auth.SuccessResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/internal_auth.UserResponse'
+                  $ref: '#/definitions/auth.UserResponse'
               type: object
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_auth.ErrorResponse'
+            $ref: '#/definitions/auth.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_auth.ErrorResponse'
+            $ref: '#/definitions/auth.ErrorResponse'
       summary: User login
       tags:
       - auth
@@ -1339,19 +1477,19 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_auth.SuccessResponse'
+            $ref: '#/definitions/auth.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_auth.ErrorResponse'
+            $ref: '#/definitions/auth.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_auth.ErrorResponse'
+            $ref: '#/definitions/auth.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_auth.ErrorResponse'
+            $ref: '#/definitions/auth.ErrorResponse'
       security:
       - BearerAuth: []
       summary: User logout
@@ -1367,19 +1505,19 @@ paths:
           description: OK
           schema:
             allOf:
-            - $ref: '#/definitions/internal_auth.SuccessResponse'
+            - $ref: '#/definitions/auth.SuccessResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/internal_auth.UserResponse'
+                  $ref: '#/definitions/auth.UserResponse'
               type: object
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_auth.ErrorResponse'
+            $ref: '#/definitions/auth.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_auth.ErrorResponse'
+            $ref: '#/definitions/auth.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get user profile
@@ -1404,19 +1542,19 @@ paths:
           description: OK
           schema:
             allOf:
-            - $ref: '#/definitions/internal_auth.SuccessResponse'
+            - $ref: '#/definitions/auth.SuccessResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/internal_auth.UserResponse'
+                  $ref: '#/definitions/auth.UserResponse'
               type: object
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_auth.ErrorResponse'
+            $ref: '#/definitions/auth.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_auth.ErrorResponse'
+            $ref: '#/definitions/auth.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Update user profile
@@ -1433,7 +1571,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_auth.RefreshTokenRequest'
+          $ref: '#/definitions/auth.RefreshTokenRequest'
       produces:
       - application/json
       responses:
@@ -1441,19 +1579,19 @@ paths:
           description: OK
           schema:
             allOf:
-            - $ref: '#/definitions/internal_auth.SuccessResponse'
+            - $ref: '#/definitions/auth.SuccessResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/internal_auth.TokenResponse'
+                  $ref: '#/definitions/auth.TokenResponse'
               type: object
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_auth.ErrorResponse'
+            $ref: '#/definitions/auth.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_auth.ErrorResponse'
+            $ref: '#/definitions/auth.ErrorResponse'
       summary: Refresh JWT token
       tags:
       - auth
@@ -1461,14 +1599,15 @@ paths:
     post:
       consumes:
       - application/json
-      description: Register a new user account with Indonesian compliance validation
+      description: Register a new company owner account (restricted to first user
+        only). For additional users, contact your company administrator.
       parameters:
       - description: User registration data
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_auth.RegisterRequest'
+          $ref: '#/definitions/auth.RegisterRequest'
       produces:
       - application/json
       responses:
@@ -1476,19 +1615,23 @@ paths:
           description: Created
           schema:
             allOf:
-            - $ref: '#/definitions/internal_auth.SuccessResponse'
+            - $ref: '#/definitions/auth.SuccessResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/internal_auth.UserResponse'
+                  $ref: '#/definitions/auth.UserResponse'
               type: object
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_auth.ErrorResponse'
+            $ref: '#/definitions/auth.ErrorResponse'
+        "403":
+          description: Registration closed - contact your admin
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
         "422":
           description: Unprocessable Entity
           schema:
-            $ref: '#/definitions/internal_auth.ValidationErrorResponse'
+            $ref: '#/definitions/auth.ValidationErrorResponse'
       summary: Register new user
       tags:
       - auth
@@ -1503,19 +1646,75 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_auth.ResetPasswordRequest'
+          $ref: '#/definitions/auth.ResetPasswordRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_auth.SuccessResponse'
+            $ref: '#/definitions/auth.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_auth.ErrorResponse'
+            $ref: '#/definitions/auth.ErrorResponse'
       summary: Reset password with token
+      tags:
+      - auth
+  /api/v1/auth/sessions:
+    get:
+      description: Get all active sessions for the current user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get active sessions
+      tags:
+      - auth
+  /api/v1/auth/sessions/{id}:
+    delete:
+      description: Revoke a specific session by ID
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Revoke session
       tags:
       - auth
   /api/v1/drivers:
@@ -1584,19 +1783,19 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_driver.PaginatedResponse'
+            $ref: '#/definitions/driver.PaginatedResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
       security:
       - BearerAuth: []
       summary: List drivers
@@ -1612,26 +1811,26 @@ paths:
         name: driver
         required: true
         schema:
-          $ref: '#/definitions/internal_driver.CreateDriverRequest'
+          $ref: '#/definitions/driver.CreateDriverRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/internal_driver.SuccessResponse'
+            $ref: '#/definitions/driver.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Create a new driver
@@ -1652,23 +1851,23 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_driver.SuccessResponse'
+            $ref: '#/definitions/driver.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Delete driver
@@ -1688,23 +1887,23 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_driver.SuccessResponse'
+            $ref: '#/definitions/driver.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get driver by ID
@@ -1725,30 +1924,30 @@ paths:
         name: driver
         required: true
         schema:
-          $ref: '#/definitions/internal_driver.UpdateDriverRequest'
+          $ref: '#/definitions/driver.UpdateDriverRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_driver.SuccessResponse'
+            $ref: '#/definitions/driver.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Update driver
@@ -1780,23 +1979,23 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_driver.SuccessResponse'
+            $ref: '#/definitions/driver.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Assign vehicle to driver
@@ -1828,23 +2027,23 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_driver.SuccessResponse'
+            $ref: '#/definitions/driver.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Update driver medical checkup
@@ -1865,23 +2064,23 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_driver.SuccessResponse'
+            $ref: '#/definitions/driver.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get driver performance
@@ -1916,23 +2115,23 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_driver.SuccessResponse'
+            $ref: '#/definitions/driver.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Update driver performance
@@ -1966,23 +2165,23 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_driver.SuccessResponse'
+            $ref: '#/definitions/driver.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Update driver status
@@ -2016,23 +2215,23 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_driver.SuccessResponse'
+            $ref: '#/definitions/driver.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Update driver training status
@@ -2053,23 +2252,23 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_driver.SuccessResponse'
+            $ref: '#/definitions/driver.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Unassign vehicle from driver
@@ -2089,23 +2288,23 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_driver.SuccessResponse'
+            $ref: '#/definitions/driver.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_driver.ErrorResponse'
+            $ref: '#/definitions/driver.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get driver vehicle
@@ -2123,7 +2322,7 @@ paths:
         "501":
           description: Not Implemented
           schema:
-            $ref: '#/definitions/internal_payment.ErrorResponse'
+            $ref: '#/definitions/payment.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Create bank transfer payment (Not Implemented)
@@ -2141,7 +2340,7 @@ paths:
         "501":
           description: Not Implemented
           schema:
-            $ref: '#/definitions/internal_payment.ErrorResponse'
+            $ref: '#/definitions/payment.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Create e-wallet payment (Not Implemented)
@@ -2171,21 +2370,21 @@ paths:
           description: OK
           schema:
             allOf:
-            - $ref: '#/definitions/internal_payment.SuccessResponse'
+            - $ref: '#/definitions/payment.SuccessResponse'
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/internal_payment.InvoiceResponse'
+                    $ref: '#/definitions/payment.InvoiceResponse'
                   type: array
               type: object
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_payment.ErrorResponse'
+            $ref: '#/definitions/payment.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_payment.ErrorResponse'
+            $ref: '#/definitions/payment.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get company invoices
@@ -2202,7 +2401,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_payment.InvoiceRequest'
+          $ref: '#/definitions/payment.InvoiceRequest'
       produces:
       - application/json
       responses:
@@ -2210,23 +2409,23 @@ paths:
           description: Created
           schema:
             allOf:
-            - $ref: '#/definitions/internal_payment.SuccessResponse'
+            - $ref: '#/definitions/payment.SuccessResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/internal_payment.InvoiceResponse'
+                  $ref: '#/definitions/payment.InvoiceResponse'
               type: object
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_payment.ErrorResponse'
+            $ref: '#/definitions/payment.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_payment.ErrorResponse'
+            $ref: '#/definitions/payment.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_payment.ErrorResponse'
+            $ref: '#/definitions/payment.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Generate invoice for manual bank transfer
@@ -2244,26 +2443,26 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_payment.PaymentConfirmationRequest'
+          $ref: '#/definitions/payment.PaymentConfirmationRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_payment.SuccessResponse'
+            $ref: '#/definitions/payment.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_payment.ErrorResponse'
+            $ref: '#/definitions/payment.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_payment.ErrorResponse'
+            $ref: '#/definitions/payment.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_payment.ErrorResponse'
+            $ref: '#/definitions/payment.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Confirm manual bank transfer payment
@@ -2286,23 +2485,23 @@ paths:
           description: OK
           schema:
             allOf:
-            - $ref: '#/definitions/internal_payment.SuccessResponse'
+            - $ref: '#/definitions/payment.SuccessResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/internal_payment.PaymentInstructions'
+                  $ref: '#/definitions/payment.PaymentInstructions'
               type: object
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_payment.ErrorResponse'
+            $ref: '#/definitions/payment.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_payment.ErrorResponse'
+            $ref: '#/definitions/payment.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_payment.ErrorResponse'
+            $ref: '#/definitions/payment.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get payment instructions
@@ -2320,7 +2519,7 @@ paths:
         "501":
           description: Not Implemented
           schema:
-            $ref: '#/definitions/internal_payment.ErrorResponse'
+            $ref: '#/definitions/payment.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Create QRIS payment (Not Implemented)
@@ -2335,7 +2534,7 @@ paths:
         "501":
           description: Not Implemented
           schema:
-            $ref: '#/definitions/internal_payment.ErrorResponse'
+            $ref: '#/definitions/payment.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get subscriptions (Not Implemented)
@@ -2351,7 +2550,7 @@ paths:
         "501":
           description: Not Implemented
           schema:
-            $ref: '#/definitions/internal_payment.ErrorResponse'
+            $ref: '#/definitions/payment.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Create subscription (Not Implemented)
@@ -2369,26 +2568,26 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_payment.SubscriptionBillingRequest'
+          $ref: '#/definitions/payment.SubscriptionBillingRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_payment.SuccessResponse'
+            $ref: '#/definitions/payment.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_payment.ErrorResponse'
+            $ref: '#/definitions/payment.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_payment.ErrorResponse'
+            $ref: '#/definitions/payment.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_payment.ErrorResponse'
+            $ref: '#/definitions/payment.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Generate subscription billing
@@ -2412,11 +2611,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_tracking.SuccessResponse'
+            $ref: '#/definitions/tracking.SuccessResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get driver performance analytics
@@ -2440,11 +2639,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_tracking.SuccessResponse'
+            $ref: '#/definitions/tracking.SuccessResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get fuel consumption analytics
@@ -2459,11 +2658,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_tracking.SuccessResponse'
+            $ref: '#/definitions/tracking.SuccessResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get dashboard statistics
@@ -2513,19 +2712,19 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_tracking.PaginatedResponse'
+            $ref: '#/definitions/tracking.PaginatedResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get driver events
@@ -2542,26 +2741,26 @@ paths:
         name: event
         required: true
         schema:
-          $ref: '#/definitions/internal_tracking.DriverEventRequest'
+          $ref: '#/definitions/tracking.DriverEventRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_tracking.SuccessResponse'
+            $ref: '#/definitions/tracking.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Submit driver event
@@ -2585,19 +2784,19 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_tracking.SuccessResponse'
+            $ref: '#/definitions/tracking.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get geofences
@@ -2613,26 +2812,26 @@ paths:
         name: geofence
         required: true
         schema:
-          $ref: '#/definitions/internal_tracking.GeofenceRequest'
+          $ref: '#/definitions/tracking.GeofenceRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_tracking.SuccessResponse'
+            $ref: '#/definitions/tracking.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Create geofence
@@ -2653,23 +2852,23 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_tracking.SuccessResponse'
+            $ref: '#/definitions/tracking.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Delete geofence
@@ -2690,30 +2889,30 @@ paths:
         name: geofence
         required: true
         schema:
-          $ref: '#/definitions/internal_tracking.GeofenceRequest'
+          $ref: '#/definitions/tracking.GeofenceRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_tracking.SuccessResponse'
+            $ref: '#/definitions/tracking.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Update geofence
@@ -2730,26 +2929,26 @@ paths:
         name: gps
         required: true
         schema:
-          $ref: '#/definitions/internal_tracking.GPSDataRequest'
+          $ref: '#/definitions/tracking.GPSDataRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_tracking.SuccessResponse'
+            $ref: '#/definitions/tracking.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Submit GPS data
@@ -2769,11 +2968,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_tracking.SuccessResponse'
+            $ref: '#/definitions/tracking.SuccessResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get compliance report
@@ -2797,11 +2996,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_tracking.SuccessResponse'
+            $ref: '#/definitions/tracking.SuccessResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Generate tracking report
@@ -2847,19 +3046,19 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_tracking.PaginatedResponse'
+            $ref: '#/definitions/tracking.PaginatedResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get trip history
@@ -2875,26 +3074,26 @@ paths:
         name: trip
         required: true
         schema:
-          $ref: '#/definitions/internal_tracking.TripRequest'
+          $ref: '#/definitions/tracking.TripRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_tracking.SuccessResponse'
+            $ref: '#/definitions/tracking.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Start a trip
@@ -2915,23 +3114,23 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_tracking.SuccessResponse'
+            $ref: '#/definitions/tracking.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get current vehicle location
@@ -2992,19 +3191,19 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_tracking.PaginatedResponse'
+            $ref: '#/definitions/tracking.PaginatedResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get vehicle location history
@@ -3033,19 +3232,19 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_tracking.SuccessResponse'
+            $ref: '#/definitions/tracking.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get vehicle route data
@@ -3066,16 +3265,274 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_tracking.ErrorResponse'
+            $ref: '#/definitions/tracking.ErrorResponse'
       security:
       - BearerAuth: []
       summary: WebSocket connection for real-time tracking
       tags:
       - tracking
+  /api/v1/users:
+    get:
+      description: List all users in the company (admin-only)
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Results per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List users
+      tags:
+      - users
+    post:
+      consumes:
+      - application/json
+      description: Create a new user within the company (admin-only, role hierarchy
+        enforced)
+      parameters:
+      - description: Create user request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.CreateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/auth.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/auth.UserResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create new user
+      tags:
+      - users
+  /api/v1/users/{id}:
+    delete:
+      description: Deactivate a user account (owner/super-admin only)
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Deactivate user
+      tags:
+      - users
+    get:
+      description: Get user details by ID (admin-only)
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/auth.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/auth.UserResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user by ID
+      tags:
+      - users
+    put:
+      consumes:
+      - application/json
+      description: Update user details (admin-only)
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update user request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.UpdateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/auth.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/auth.UserResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update user
+      tags:
+      - users
+  /api/v1/users/{id}/role:
+    put:
+      consumes:
+      - application/json
+      description: Change a user's role (admin-only, role hierarchy enforced)
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Change role request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.ChangeRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change user role
+      tags:
+      - users
+  /api/v1/users/allowed-roles:
+    get:
+      description: Get list of roles that current user can assign
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get allowed roles
+      tags:
+      - users
   /api/v1/vehicles:
     get:
       description: List vehicles with filters and pagination
@@ -3138,19 +3595,19 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_vehicle.PaginatedResponse'
+            $ref: '#/definitions/vehicle.PaginatedResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
       security:
       - BearerAuth: []
       summary: List vehicles
@@ -3166,26 +3623,26 @@ paths:
         name: vehicle
         required: true
         schema:
-          $ref: '#/definitions/internal_vehicle.CreateVehicleRequest'
+          $ref: '#/definitions/vehicle.CreateVehicleRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/internal_vehicle.SuccessResponse'
+            $ref: '#/definitions/vehicle.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Create a new vehicle
@@ -3206,23 +3663,23 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_vehicle.SuccessResponse'
+            $ref: '#/definitions/vehicle.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Delete vehicle
@@ -3242,23 +3699,23 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_vehicle.SuccessResponse'
+            $ref: '#/definitions/vehicle.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get vehicle by ID
@@ -3279,30 +3736,30 @@ paths:
         name: vehicle
         required: true
         schema:
-          $ref: '#/definitions/internal_vehicle.UpdateVehicleRequest'
+          $ref: '#/definitions/vehicle.UpdateVehicleRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_vehicle.SuccessResponse'
+            $ref: '#/definitions/vehicle.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Update vehicle
@@ -3334,23 +3791,23 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_vehicle.SuccessResponse'
+            $ref: '#/definitions/vehicle.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Assign driver to vehicle
@@ -3371,23 +3828,23 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_vehicle.SuccessResponse'
+            $ref: '#/definitions/vehicle.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Unassign driver from vehicle
@@ -3407,23 +3864,23 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_vehicle.SuccessResponse'
+            $ref: '#/definitions/vehicle.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get vehicle driver
@@ -3455,23 +3912,23 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_vehicle.SuccessResponse'
+            $ref: '#/definitions/vehicle.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Update vehicle inspection date
@@ -3505,28 +3962,110 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_vehicle.SuccessResponse'
+            $ref: '#/definitions/vehicle.SuccessResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_vehicle.ErrorResponse'
+            $ref: '#/definitions/vehicle.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Update vehicle status
       tags:
       - vehicles
+  /health:
+    get:
+      description: Basic health check endpoint (liveness probe)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/health.HealthResponse'
+      summary: Health check
+      tags:
+      - health
+  /health/detailed:
+    get:
+      description: Comprehensive health check with all system details
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/health.HealthResponse'
+      summary: Detailed health check
+      tags:
+      - health
+  /health/live:
+    get:
+      description: Kubernetes liveness probe endpoint
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/health.HealthResponse'
+      summary: Liveness probe
+      tags:
+      - health
+  /health/ready:
+    get:
+      description: Kubernetes readiness probe endpoint with dependency checks
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Service is ready
+          schema:
+            $ref: '#/definitions/health.HealthResponse'
+        "503":
+          description: Service is not ready
+          schema:
+            $ref: '#/definitions/health.HealthResponse'
+      summary: Readiness probe
+      tags:
+      - health
+  /metrics:
+    get:
+      description: Prometheus-compatible metrics endpoint
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Prometheus metrics
+          schema:
+            type: string
+      summary: Prometheus metrics
+      tags:
+      - health
+  /metrics/json:
+    get:
+      description: System metrics in JSON format
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/health.MetricsResponse'
+      summary: Metrics (JSON)
+      tags:
+      - health
 securityDefinitions:
   BearerAuth:
     description: Type "Bearer" followed by a space and JWT token.

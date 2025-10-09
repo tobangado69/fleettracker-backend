@@ -2,9 +2,11 @@ package auth
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tobangado69/fleettracker-pro/backend/internal/common/middleware"
+	"github.com/tobangado69/fleettracker-pro/backend/internal/common/validators"
 )
 
 // SuccessResponse represents a success response
@@ -14,6 +16,19 @@ type SuccessResponse struct {
 	Message string      `json:"message,omitempty" example:"Operation successful"`
 }
 
+// ErrorResponse represents an error response
+type ErrorResponse struct {
+	Success bool   `json:"success" example:"false"`
+	Error   string `json:"error" example:"Bad request"`
+	Message string `json:"message,omitempty" example:"Invalid input"`
+}
+
+// ValidationErrorResponse represents validation error response
+type ValidationErrorResponse struct {
+	Success bool                   `json:"success" example:"false"`
+	Error   string                 `json:"error" example:"Validation failed"`
+	Errors  map[string]interface{} `json:"errors,omitempty"`
+}
 
 // RefreshTokenRequest represents refresh token request
 type RefreshTokenRequest struct {
@@ -49,15 +64,16 @@ func NewHandler(service *Service) *Handler {
 	}
 }
 
-// Register handles user registration
+// Register handles user registration (RESTRICTED: First user/company owner only)
 // @Summary Register new user
-// @Description Register a new user account with Indonesian compliance validation
+// @Description Register a new company owner account (restricted to first user only). For additional users, contact your company administrator.
 // @Tags auth
 // @Accept json
 // @Produce json
 // @Param request body RegisterRequest true "User registration data"
 // @Success 201 {object} SuccessResponse{data=UserResponse}
 // @Failure 400 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse "Registration closed - contact your admin"
 // @Failure 422 {object} ValidationErrorResponse
 // @Router /api/v1/auth/register [post]
 func (h *Handler) Register(c *gin.Context) {
@@ -67,6 +83,56 @@ func (h *Handler) Register(c *gin.Context) {
 		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
+
+	// SECURITY: Check if this is the first user in the system
+	isFirst, err := h.service.IsFirstUser()
+	if err != nil {
+		middleware.AbortWithInternal(c, "Failed to check user count", err)
+		return
+	}
+
+	if !isFirst {
+		// Public registration is closed - users must be created by admins
+		c.JSON(http.StatusForbidden, ErrorResponse{
+			Success: false,
+			Error:   "Public registration is closed",
+			Message: "This is a SaaS platform with controlled access. New users must be created by your company administrator. If you need access, please contact your company owner or administrator.",
+		})
+		return
+	}
+
+	// Validate email
+	if err := validators.ValidateEmail(req.Email); err != nil {
+		middleware.AbortWithBadRequest(c, "Invalid email: "+err.Error())
+		return
+	}
+
+	// Validate username
+	if err := validators.ValidateUsername(req.Username); err != nil {
+		middleware.AbortWithBadRequest(c, "Invalid username: "+err.Error())
+		return
+	}
+
+	// Validate password
+	if err := validators.ValidatePassword(req.Password); err != nil {
+		middleware.AbortWithBadRequest(c, "Invalid password: "+err.Error())
+		return
+	}
+
+	// Validate phone if provided
+	if req.Phone != "" {
+		phoneClean := validators.CleanPhoneNumber(req.Phone)
+		if err := validators.ValidatePhoneNumber(phoneClean); err != nil {
+			middleware.AbortWithBadRequest(c, "Invalid phone: "+err.Error())
+			return
+		}
+		req.Phone = validators.FormatPhoneNumber(phoneClean)
+	}
+
+	// Sanitize text inputs
+	sanitizer := validators.NewSanitizer()
+	req.FirstName = sanitizer.SanitizeUserInput(req.FirstName, 100)
+	req.LastName = sanitizer.SanitizeUserInput(req.LastName, 100)
 
 	user, err := h.service.Register(req)
 	if err != nil {
@@ -98,6 +164,15 @@ func (h *Handler) Login(c *gin.Context) {
 		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
+
+	// Validate email format
+	if err := validators.ValidateEmail(req.Email); err != nil {
+		middleware.AbortWithBadRequest(c, "Invalid email: "+err.Error())
+		return
+	}
+
+	// Sanitize email (trim, lowercase)
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 
 	user, tokens, err := h.service.Login(req)
 	if err != nil {
@@ -278,6 +353,12 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 		return
 	}
 
+	// Validate new password
+	if err := validators.ValidatePassword(req.NewPassword); err != nil {
+		middleware.AbortWithBadRequest(c, "Invalid new password: "+err.Error())
+		return
+	}
+
 	err := h.service.ChangePassword(userID.(string), req.CurrentPassword, req.NewPassword)
 	if err != nil {
 		middleware.AbortWithBadRequest(c, err.Error())
@@ -307,6 +388,13 @@ func (h *Handler) ForgotPassword(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		middleware.AbortWithBadRequest(c, err.Error())
+		return
+	}
+
+	// Validate and sanitize email
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	if err := validators.ValidateEmail(req.Email); err != nil {
+		middleware.AbortWithBadRequest(c, "Invalid email: "+err.Error())
 		return
 	}
 
@@ -342,6 +430,12 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 		return
 	}
 
+	// Validate new password
+	if err := validators.ValidatePassword(req.NewPassword); err != nil {
+		middleware.AbortWithBadRequest(c, "Invalid password: "+err.Error())
+		return
+	}
+
 	err := h.service.ResetPassword(req.Token, req.NewPassword)
 	if err != nil {
 		middleware.AbortWithBadRequest(c, err.Error())
@@ -354,17 +448,75 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 }
 
 // GetActiveSessions handles getting user's active sessions
+// @Summary Get active sessions
+// @Description Get all active sessions for the current user
+// @Tags auth
+// @Produce json
+// @Success 200 {object} SuccessResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/auth/sessions [get]
+// @Security BearerAuth
 func (h *Handler) GetActiveSessions(c *gin.Context) {
-	// TODO: Implement get active sessions
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Get active sessions not implemented yet",
+	// Get user ID from context
+	userID, exists := c.Get("user_id")
+	if !exists {
+		middleware.AbortWithUnauthorized(c, "User ID not found")
+		return
+	}
+
+	// Get current token from header
+	token := c.GetHeader("Authorization")
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	sessions, appErr := h.service.GetActiveSessions(c.Request.Context(), userID.(string), token)
+	if appErr != nil {
+		middleware.AbortWithError(c, appErr)
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    sessions,
 	})
 }
 
 // RevokeSession handles revoking a specific session
+// @Summary Revoke session
+// @Description Revoke a specific session by ID
+// @Tags auth
+// @Produce json
+// @Param id path string true "Session ID"
+// @Success 200 {object} SuccessResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/auth/sessions/{id} [delete]
+// @Security BearerAuth
 func (h *Handler) RevokeSession(c *gin.Context) {
-	// TODO: Implement revoke session
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Revoke session not implemented yet",
+	// Get user ID from context
+	userID, exists := c.Get("user_id")
+	if !exists {
+		middleware.AbortWithUnauthorized(c, "User ID not found")
+		return
+	}
+
+	sessionID := c.Param("id")
+	if sessionID == "" {
+		middleware.AbortWithBadRequest(c, "Session ID is required")
+		return
+	}
+
+	appErr := h.service.RevokeSession(c.Request.Context(), userID.(string), sessionID)
+	if appErr != nil {
+		middleware.AbortWithError(c, appErr)
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Session revoked successfully",
 	})
 }

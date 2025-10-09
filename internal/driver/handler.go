@@ -32,6 +32,13 @@ type SuccessResponse struct {
 	Message string      `json:"message,omitempty"`
 }
 
+// ErrorResponse represents an error response
+type ErrorResponse struct {
+	Success bool   `json:"success" example:"false"`
+	Error   string `json:"error"`
+	Message string `json:"message,omitempty"`
+}
+
 // PaginatedResponse represents a paginated response
 type PaginatedResponse struct {
 	Success bool        `json:"success"`

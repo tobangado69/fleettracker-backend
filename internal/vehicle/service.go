@@ -1,12 +1,15 @@
 package vehicle
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	apperrors "github.com/tobangado69/fleettracker-pro/backend/pkg/errors"
 	"github.com/tobangado69/fleettracker-pro/backend/pkg/models"
 	"gorm.io/gorm"
@@ -14,13 +17,150 @@ import (
 
 // Service handles vehicle operations
 type Service struct {
-	db *gorm.DB
+	db    *gorm.DB
+	redis *redis.Client
+	cache *CacheService
+}
+
+// CacheService provides caching functionality for vehicle operations
+type CacheService struct {
+	redis *redis.Client
+}
+
+// NewCacheService creates a new cache service
+func NewCacheService(redis *redis.Client) *CacheService {
+	return &CacheService{redis: redis}
+}
+
+// GetVehicleFromCache retrieves a vehicle from cache
+func (cs *CacheService) GetVehicleFromCache(ctx context.Context, vehicleID string) (*models.Vehicle, error) {
+	key := fmt.Sprintf("vehicle:%s", vehicleID)
+	
+	var vehicle models.Vehicle
+	data, err := cs.redis.Get(ctx, key).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, nil // Cache miss
+		}
+		return nil, fmt.Errorf("failed to get vehicle from cache: %w", err)
+	}
+	
+	if err := json.Unmarshal([]byte(data), &vehicle); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal vehicle from cache: %w", err)
+	}
+	
+	return &vehicle, nil
+}
+
+// SetVehicleInCache stores a vehicle in cache
+func (cs *CacheService) SetVehicleInCache(ctx context.Context, vehicle *models.Vehicle, expiration time.Duration) error {
+	key := fmt.Sprintf("vehicle:%s", vehicle.ID)
+	
+	data, err := json.Marshal(vehicle)
+	if err != nil {
+		return fmt.Errorf("failed to marshal vehicle for cache: %w", err)
+	}
+	
+	if err := cs.redis.Set(ctx, key, data, expiration).Err(); err != nil {
+		return fmt.Errorf("failed to set vehicle in cache: %w", err)
+	}
+	
+	return nil
+}
+
+// InvalidateVehicleCache removes a vehicle from cache
+func (cs *CacheService) InvalidateVehicleCache(ctx context.Context, vehicleID string) error {
+	key := fmt.Sprintf("vehicle:%s", vehicleID)
+	
+	if err := cs.redis.Del(ctx, key).Err(); err != nil {
+		return fmt.Errorf("failed to invalidate vehicle cache: %w", err)
+	}
+	
+	return nil
+}
+
+// GetVehicleListFromCache retrieves a vehicle list from cache
+func (cs *CacheService) GetVehicleListFromCache(ctx context.Context, companyID string, filters VehicleFilters) ([]models.Vehicle, int64, error) {
+	// Create cache key based on filters
+	cacheKey := cs.generateVehicleListCacheKey(companyID, filters)
+	
+	var result struct {
+		Vehicles []models.Vehicle `json:"vehicles"`
+		Total    int64            `json:"total"`
+	}
+	
+	data, err := cs.redis.Get(ctx, cacheKey).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, 0, nil // Cache miss
+		}
+		return nil, 0, fmt.Errorf("failed to get vehicle list from cache: %w", err)
+	}
+	
+	if err := json.Unmarshal([]byte(data), &result); err != nil {
+		return nil, 0, fmt.Errorf("failed to unmarshal vehicle list from cache: %w", err)
+	}
+	
+	return result.Vehicles, result.Total, nil
+}
+
+// SetVehicleListInCache stores a vehicle list in cache
+func (cs *CacheService) SetVehicleListInCache(ctx context.Context, companyID string, filters VehicleFilters, vehicles []models.Vehicle, total int64, expiration time.Duration) error {
+	cacheKey := cs.generateVehicleListCacheKey(companyID, filters)
+	
+	result := struct {
+		Vehicles []models.Vehicle `json:"vehicles"`
+		Total    int64            `json:"total"`
+	}{
+		Vehicles: vehicles,
+		Total:    total,
+	}
+	
+	data, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Errorf("failed to marshal vehicle list for cache: %w", err)
+	}
+	
+	if err := cs.redis.Set(ctx, cacheKey, data, expiration).Err(); err != nil {
+		return fmt.Errorf("failed to set vehicle list in cache: %w", err)
+	}
+	
+	return nil
+}
+
+// InvalidateVehicleListCache removes vehicle list cache for a company
+func (cs *CacheService) InvalidateVehicleListCache(ctx context.Context, companyID string) error {
+	pattern := fmt.Sprintf("vehicle:list:%s:*", companyID)
+	
+	keys, err := cs.redis.Keys(ctx, pattern).Result()
+	if err != nil {
+		return fmt.Errorf("failed to get vehicle list cache keys: %w", err)
+	}
+	
+	if len(keys) > 0 {
+		if err := cs.redis.Del(ctx, keys...).Err(); err != nil {
+			return fmt.Errorf("failed to invalidate vehicle list cache: %w", err)
+		}
+	}
+	
+	return nil
+}
+
+// generateVehicleListCacheKey creates a cache key for vehicle list queries
+func (cs *CacheService) generateVehicleListCacheKey(companyID string, filters VehicleFilters) string {
+	// Create a hash of the filters to make a unique key
+	filterHash := fmt.Sprintf("%v", filters)
+	// Simple hash function (in production, use a proper hash)
+	hash := fmt.Sprintf("%x", filterHash)
+	return fmt.Sprintf("vehicle:list:%s:%s", companyID, hash)
 }
 
 // NewService creates a new vehicle service
-func NewService(db *gorm.DB) *Service {
+func NewService(db *gorm.DB, redis *redis.Client) *Service {
 	return &Service{
-		db: db,
+		db:    db,
+		redis: redis,
+		cache: NewCacheService(redis),
 	}
 }
 
@@ -191,18 +331,44 @@ func (s *Service) CreateVehicle(companyID string, req CreateVehicleRequest) (*mo
 		return nil, apperrors.NewInternalError("Failed to create vehicle").WithInternal(err)
 	}
 
+	// Invalidate vehicle list cache after creating new vehicle
+	ctx := context.Background()
+	if err := s.cache.InvalidateVehicleListCache(ctx, companyID); err != nil {
+		// Log cache invalidation error but don't fail the request
+		fmt.Printf("Failed to invalidate vehicle list cache %s: %v\n", companyID, err)
+	}
+
 	return vehicle, nil
 }
 
-// GetVehicle retrieves a vehicle by ID
+// GetVehicle retrieves a vehicle by ID with caching
 func (s *Service) GetVehicle(companyID, vehicleID string) (*models.Vehicle, error) {
-	var vehicle models.Vehicle
+	ctx := context.Background()
 	
+	// Try to get from cache first
+	cachedVehicle, err := s.cache.GetVehicleFromCache(ctx, vehicleID)
+	if err != nil {
+		// Log cache error but continue with database lookup
+		fmt.Printf("Cache error for vehicle %s: %v\n", vehicleID, err)
+	}
+	
+	if cachedVehicle != nil && cachedVehicle.CompanyID == companyID {
+		return cachedVehicle, nil
+	}
+	
+	// Get from database
+	var vehicle models.Vehicle
 	if err := s.db.Preload("Driver").Where("company_id = ? AND id = ?", companyID, vehicleID).First(&vehicle).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, apperrors.NewNotFoundError("Vehicle")
 		}
 		return nil, apperrors.NewInternalError("Failed to fetch vehicle").WithInternal(err)
+	}
+
+	// Cache the result for 30 minutes
+	if err := s.cache.SetVehicleInCache(ctx, &vehicle, 30*time.Minute); err != nil {
+		// Log cache error but don't fail the request
+		fmt.Printf("Failed to cache vehicle %s: %v\n", vehicleID, err)
 	}
 
 	return &vehicle, nil
@@ -330,6 +496,18 @@ func (s *Service) UpdateVehicle(companyID, vehicleID string, req UpdateVehicleRe
 		return nil, apperrors.NewInternalError("Failed to update vehicle").WithInternal(err)
 	}
 
+	// Invalidate cache after update
+	ctx := context.Background()
+	if err := s.cache.InvalidateVehicleCache(ctx, vehicleID); err != nil {
+		// Log cache invalidation error but don't fail the request
+		fmt.Printf("Failed to invalidate vehicle cache %s: %v\n", vehicleID, err)
+	}
+	
+	// Also invalidate vehicle list cache since the vehicle data changed
+	if err := s.cache.InvalidateVehicleListCache(ctx, companyID); err != nil {
+		fmt.Printf("Failed to invalidate vehicle list cache %s: %v\n", companyID, err)
+	}
+
 	return vehicle, nil
 }
 
@@ -356,6 +534,19 @@ func (s *Service) DeleteVehicle(companyID, vehicleID string) error {
 
 // ListVehicles lists vehicles with filters and pagination
 func (s *Service) ListVehicles(companyID string, filters VehicleFilters) ([]models.Vehicle, int64, error) {
+	ctx := context.Background()
+	
+	// Try to get from cache first
+	cachedVehicles, cachedTotal, err := s.cache.GetVehicleListFromCache(ctx, companyID, filters)
+	if err != nil {
+		// Log cache error but continue with database lookup
+		fmt.Printf("Cache error for vehicle list %s: %v\n", companyID, err)
+	}
+	
+	if cachedVehicles != nil {
+		return cachedVehicles, cachedTotal, nil
+	}
+	
 	var vehicles []models.Vehicle
 	var total int64
 
@@ -424,6 +615,12 @@ func (s *Service) ListVehicles(companyID string, filters VehicleFilters) ([]mode
 	// Execute query with preload
 	if err := query.Preload("Driver").Find(&vehicles).Error; err != nil {
 		return nil, 0, apperrors.NewInternalError("Failed to list vehicles").WithInternal(err)
+	}
+
+	// Cache the result for 15 minutes (shorter TTL for lists)
+	if err := s.cache.SetVehicleListInCache(ctx, companyID, filters, vehicles, total, 15*time.Minute); err != nil {
+		// Log cache error but don't fail the request
+		fmt.Printf("Failed to cache vehicle list %s: %v\n", companyID, err)
 	}
 
 	return vehicles, total, nil

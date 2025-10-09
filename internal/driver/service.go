@@ -1,12 +1,15 @@
 package driver
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	apperrors "github.com/tobangado69/fleettracker-pro/backend/pkg/errors"
 	"github.com/tobangado69/fleettracker-pro/backend/pkg/models"
 	"gorm.io/gorm"
@@ -14,13 +17,147 @@ import (
 
 // Service handles driver operations
 type Service struct {
-	db *gorm.DB
+	db    *gorm.DB
+	redis *redis.Client
+	cache *CacheService
+}
+
+// CacheService provides caching functionality for driver operations
+type CacheService struct {
+	redis *redis.Client
+}
+
+// NewCacheService creates a new cache service
+func NewCacheService(redis *redis.Client) *CacheService {
+	return &CacheService{redis: redis}
+}
+
+// GetDriverFromCache retrieves a driver from cache
+func (cs *CacheService) GetDriverFromCache(ctx context.Context, driverID string) (*models.Driver, error) {
+	key := fmt.Sprintf("driver:%s", driverID)
+	
+	var driver models.Driver
+	data, err := cs.redis.Get(ctx, key).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, nil // Cache miss
+		}
+		return nil, fmt.Errorf("failed to get driver from cache: %w", err)
+	}
+	
+	if err := json.Unmarshal([]byte(data), &driver); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal driver from cache: %w", err)
+	}
+	
+	return &driver, nil
+}
+
+// SetDriverInCache stores a driver in cache
+func (cs *CacheService) SetDriverInCache(ctx context.Context, driver *models.Driver, expiration time.Duration) error {
+	key := fmt.Sprintf("driver:%s", driver.ID)
+	
+	data, err := json.Marshal(driver)
+	if err != nil {
+		return fmt.Errorf("failed to marshal driver for cache: %w", err)
+	}
+	
+	if err := cs.redis.Set(ctx, key, data, expiration).Err(); err != nil {
+		return fmt.Errorf("failed to set driver in cache: %w", err)
+	}
+	
+	return nil
+}
+
+// InvalidateDriverCache removes a driver from cache
+func (cs *CacheService) InvalidateDriverCache(ctx context.Context, driverID string) error {
+	key := fmt.Sprintf("driver:%s", driverID)
+	
+	if err := cs.redis.Del(ctx, key).Err(); err != nil {
+		return fmt.Errorf("failed to invalidate driver cache: %w", err)
+	}
+	
+	return nil
+}
+
+// GetDriverListFromCache retrieves a driver list from cache
+func (cs *CacheService) GetDriverListFromCache(ctx context.Context, companyID string, filters DriverFilters) ([]models.Driver, int64, error) {
+	cacheKey := cs.generateDriverListCacheKey(companyID, filters)
+	
+	var result struct {
+		Drivers []models.Driver `json:"drivers"`
+		Total   int64          `json:"total"`
+	}
+	
+	data, err := cs.redis.Get(ctx, cacheKey).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, 0, nil // Cache miss
+		}
+		return nil, 0, fmt.Errorf("failed to get driver list from cache: %w", err)
+	}
+	
+	if err := json.Unmarshal([]byte(data), &result); err != nil {
+		return nil, 0, fmt.Errorf("failed to unmarshal driver list from cache: %w", err)
+	}
+	
+	return result.Drivers, result.Total, nil
+}
+
+// SetDriverListInCache stores a driver list in cache
+func (cs *CacheService) SetDriverListInCache(ctx context.Context, companyID string, filters DriverFilters, drivers []models.Driver, total int64, expiration time.Duration) error {
+	cacheKey := cs.generateDriverListCacheKey(companyID, filters)
+	
+	result := struct {
+		Drivers []models.Driver `json:"drivers"`
+		Total   int64          `json:"total"`
+	}{
+		Drivers: drivers,
+		Total:   total,
+	}
+	
+	data, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Errorf("failed to marshal driver list for cache: %w", err)
+	}
+	
+	if err := cs.redis.Set(ctx, cacheKey, data, expiration).Err(); err != nil {
+		return fmt.Errorf("failed to set driver list in cache: %w", err)
+	}
+	
+	return nil
+}
+
+// InvalidateDriverListCache removes driver list cache for a company
+func (cs *CacheService) InvalidateDriverListCache(ctx context.Context, companyID string) error {
+	pattern := fmt.Sprintf("driver:list:%s:*", companyID)
+	
+	keys, err := cs.redis.Keys(ctx, pattern).Result()
+	if err != nil {
+		return fmt.Errorf("failed to get driver list cache keys: %w", err)
+	}
+	
+	if len(keys) > 0 {
+		if err := cs.redis.Del(ctx, keys...).Err(); err != nil {
+			return fmt.Errorf("failed to invalidate driver list cache: %w", err)
+		}
+	}
+	
+	return nil
+}
+
+// generateDriverListCacheKey creates a cache key for driver list queries
+func (cs *CacheService) generateDriverListCacheKey(companyID string, filters DriverFilters) string {
+	filterHash := fmt.Sprintf("%v", filters)
+	hash := fmt.Sprintf("%x", filterHash)
+	return fmt.Sprintf("driver:list:%s:%s", companyID, hash)
 }
 
 // NewService creates a new driver service
-func NewService(db *gorm.DB) *Service {
+func NewService(db *gorm.DB, redis *redis.Client) *Service {
 	return &Service{
-		db: db,
+		db:    db,
+		redis: redis,
+		cache: NewCacheService(redis),
 	}
 }
 
@@ -231,6 +368,19 @@ func (s *Service) CreateDriver(companyID string, req CreateDriverRequest) (*mode
 
 // GetDriver retrieves a driver by ID
 func (s *Service) GetDriver(companyID, driverID string) (*models.Driver, error) {
+	ctx := context.Background()
+	
+	// Try to get from cache first
+	cachedDriver, err := s.cache.GetDriverFromCache(ctx, driverID)
+	if err != nil {
+		// Log cache error but continue with database lookup
+		fmt.Printf("Cache error for driver %s: %v\n", driverID, err)
+	}
+	
+	if cachedDriver != nil && cachedDriver.CompanyID == companyID {
+		return cachedDriver, nil
+	}
+	
 	var driver models.Driver
 	
 	if err := s.db.Preload("Vehicle").Where("company_id = ? AND id = ?", companyID, driverID).First(&driver).Error; err != nil {
@@ -238,6 +388,12 @@ func (s *Service) GetDriver(companyID, driverID string) (*models.Driver, error) 
 			return nil, apperrors.NewNotFoundError("driver")
 		}
 		return nil, apperrors.Wrap(err, "failed to get driver")
+	}
+
+	// Cache the result for 30 minutes
+	if err := s.cache.SetDriverInCache(ctx, &driver, 30*time.Minute); err != nil {
+		// Log cache error but don't fail the request
+		fmt.Printf("Failed to cache driver %s: %v\n", driverID, err)
 	}
 
 	return &driver, nil

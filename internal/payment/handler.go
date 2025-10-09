@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tobangado69/fleettracker-pro/backend/internal/common/middleware"
 )
 
 // SuccessResponse represents a success response
@@ -45,14 +46,14 @@ func NewHandler(service *Service) *Handler {
 func (h *Handler) GenerateInvoice(c *gin.Context) {
 	var req InvoiceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data", "details": err.Error()})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
 	// Get company ID from authenticated user context
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Company ID not found in context"})
+		middleware.AbortWithUnauthorized(c, "Company ID not found in context")
 		return
 	}
 
@@ -60,7 +61,7 @@ func (h *Handler) GenerateInvoice(c *gin.Context) {
 
 	response, err := h.service.GenerateInvoice(c.Request.Context(), &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate invoice", "details": err.Error()})
+		middleware.AbortWithInternal(c, "Failed to generate invoice", err)
 		return
 	}
 
@@ -86,20 +87,20 @@ func (h *Handler) GenerateInvoice(c *gin.Context) {
 func (h *Handler) ConfirmPayment(c *gin.Context) {
 	var req PaymentConfirmationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data", "details": err.Error()})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
 	// Get user ID from authenticated user context
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in context"})
+		middleware.AbortWithUnauthorized(c, "User ID not found in context")
 		return
 	}
 
 	err := h.service.ConfirmPayment(c.Request.Context(), &req, userID.(string))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to confirm payment", "details": err.Error()})
+		middleware.AbortWithInternal(c, "Failed to confirm payment", err)
 		return
 	}
 
@@ -126,7 +127,7 @@ func (h *Handler) GetInvoices(c *gin.Context) {
 	// Get company ID from authenticated user context
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Company ID not found in context"})
+		middleware.AbortWithUnauthorized(c, "Company ID not found in context")
 		return
 	}
 
@@ -147,7 +148,7 @@ func (h *Handler) GetInvoices(c *gin.Context) {
 
 	invoices, err := h.service.GetInvoices(c.Request.Context(), companyID.(string), status, limit, offset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve invoices", "details": err.Error()})
+		middleware.AbortWithInternal(c, "Failed to retrieve invoices", err)
 		return
 	}
 
@@ -172,13 +173,13 @@ func (h *Handler) GetInvoices(c *gin.Context) {
 func (h *Handler) GetPaymentInstructions(c *gin.Context) {
 	invoiceID := c.Param("id")
 	if invoiceID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invoice ID is required"})
+		middleware.AbortWithBadRequest(c, "Invoice ID is required")
 		return
 	}
 
 	instructions, err := h.service.GetPaymentInstructions(c.Request.Context(), invoiceID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get payment instructions", "details": err.Error()})
+		middleware.AbortWithInternal(c, "Failed to get payment instructions", err)
 		return
 	}
 
@@ -204,14 +205,14 @@ func (h *Handler) GetPaymentInstructions(c *gin.Context) {
 func (h *Handler) GenerateSubscriptionBilling(c *gin.Context) {
 	var req SubscriptionBillingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data", "details": err.Error()})
+		middleware.AbortWithBadRequest(c, err.Error())
 		return
 	}
 
 	// Get company ID from authenticated user context
 	companyID, exists := c.Get("company_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Company ID not found in context"})
+		middleware.AbortWithUnauthorized(c, "Company ID not found in context")
 		return
 	}
 
@@ -219,7 +220,7 @@ func (h *Handler) GenerateSubscriptionBilling(c *gin.Context) {
 
 	err := h.service.GenerateSubscriptionBilling(c.Request.Context(), &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate subscription billing", "details": err.Error()})
+		middleware.AbortWithInternal(c, "Failed to generate subscription billing", err)
 		return
 	}
 

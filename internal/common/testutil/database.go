@@ -13,19 +13,21 @@ import (
 // SetupTestDB creates a test database for testing
 // Uses Postgres test database from environment or defaults to test instance
 func SetupTestDB(t *testing.T) (*gorm.DB, func()) {
-	// Get database URL from environment or use default
-	// Try common PostgreSQL configurations
+	// Get database URL from environment
 	var testDBURL string
 	
-	if os.Getenv("DATABASE_URL") != "" {
-		// Use environment variable if available
+	// Priority 1: TEST_DATABASE_URL (specifically for tests)
+	if os.Getenv("TEST_DATABASE_URL") != "" {
+		testDBURL = os.Getenv("TEST_DATABASE_URL")
+		t.Logf("Using TEST_DATABASE_URL from environment")
+	} else if os.Getenv("DATABASE_URL") != "" {
+		// Priority 2: DATABASE_URL
 		testDBURL = os.Getenv("DATABASE_URL")
+		t.Logf("Using DATABASE_URL from environment")
 	} else {
-		// Try common PostgreSQL configurations
-		// First try with postgres user (most common)
-		testDBURL = "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
-		
-		// If that fails, we'll try other configurations
+		// Priority 3: Default to Docker Compose setup
+		testDBURL = "postgres://fleettracker:password123@localhost:5432/fleettracker?sslmode=disable"
+		t.Logf("Using default Docker Compose configuration")
 	}
 
 	// Create database connection with fallback configurations
@@ -35,9 +37,10 @@ func SetupTestDB(t *testing.T) (*gorm.DB, func()) {
 	// Try different database configurations
 	configs := []string{
 		testDBURL, // First try the configured URL
+		"postgres://fleettracker@localhost:5432/fleettracker?sslmode=disable", // Docker Compose (trust auth)
+		"postgres://fleettracker:password123@localhost:5432/fleettracker?sslmode=disable", // Docker Compose (with password)
+		"postgres://postgres@localhost:5432/postgres?sslmode=disable", // Default (trust auth)
 		"postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable",
-		"postgres://postgres:@localhost:5432/postgres?sslmode=disable",
-		"postgres://fleettracker:password123@localhost:5432/fleettracker?sslmode=disable",
 	}
 	
 	for i, config := range configs {

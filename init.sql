@@ -2,9 +2,10 @@
 -- PostgreSQL with PostGIS for main application data
 -- Indonesian Fleet Management SaaS Application
 
--- Enable PostGIS extension
+-- Enable required PostgreSQL extensions
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS pgcrypto; -- For gen_random_uuid()
 
 -- Create database user if not exists
 DO $$
